@@ -5,7 +5,8 @@ WORKDIR /app
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1
+    PIP_NO_CACHE_DIR=1 \
+    PIP_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/
 
 RUN sed -ri \
         's@deb.debian.org/debian@mirrors.aliyun.com/debian@g; s@security.debian.org/debian-security@mirrors.aliyun.com/debian-security@g' \
