@@ -1,0 +1,17 @@
+FROM public.ecr.aws/docker/library/postgres:16-bookworm AS builder
+
+ARG PGVECTOR_VERSION=v0.8.2
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        build-essential \
+        ca-certificates \
+        git \
+        postgresql-server-dev-16 \
+    && git clone --branch "${PGVECTOR_VERSION}" --depth 1 \
+        https://github.com/pgvector/pgvector.git /tmp/pgvector \
+    && make -C /tmp/pgvector OPTFLAGS="" \
+    && make -C /tmp/pgvector install DESTDIR=/tmp/pgvector-stage
+
+FROM public.ecr.aws/docker/library/postgres:16-bookworm
+
+COPY --from=builder /tmp/pgvector-stage/ /

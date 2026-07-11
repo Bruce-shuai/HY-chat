@@ -103,7 +103,10 @@ services:
     mem_limit: 448m
 
   postgres:
-    image: pgvector/pgvector:pg16
+    build:
+      context: ../..
+      dockerfile: deploy/ecs/Dockerfile.pgvector
+    image: hy-chat-pgvector:pg16
     container_name: hy-chat-postgres
     environment:
       POSTGRES_USER: hy_chat
@@ -121,7 +124,7 @@ services:
     mem_limit: 384m
 
   redis:
-    image: redis:7-alpine
+    image: public.ecr.aws/docker/library/redis:7-alpine
     container_name: hy-chat-redis
     command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD}"]
     volumes:
