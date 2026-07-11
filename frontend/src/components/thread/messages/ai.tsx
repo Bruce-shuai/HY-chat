@@ -1,14 +1,19 @@
 import { parsePartialJson } from "@langchain/core/output_parsers";
 import { useStreamContext } from "@/providers/Stream";
-import { AIMessage, Checkpoint, Message } from "@langchain/langgraph-sdk";
-import { useStream } from "@langchain/langgraph-sdk/react";
+import {
+  AIMessage,
+  type BaseMessage,
+  isAIMessage,
+  isToolMessage,
+  type MessageContentComplex,
+} from "@langchain/core/messages";
+import { useMessageMetadata } from "@langchain/react";
 import { getContentString } from "../utils";
-import { BranchSwitcher, CommandBar } from "./shared";
+import { CommandBar } from "./shared";
 import { MarkdownText } from "../markdown-text";
 import { LoadExternalComponent } from "@langchain/langgraph-sdk/react-ui";
 import { cn } from "@/lib/utils";
 import { ToolCalls, ToolResult } from "./tool-calls";
-import { MessageContentComplex } from "@langchain/core/messages";
 import { Fragment } from "react/jsx-runtime";
 import { isAgentInboxInterruptSchema } from "@/lib/agent-inbox-interrupt";
 import { ThreadView } from "../agent-inbox";
@@ -20,7 +25,7 @@ function CustomComponent({
   message,
   thread,
 }: {
-  message: Message;
+  message: BaseMessage;
   thread: ReturnType<typeof useStreamContext>;
 }) {
   const artifact = useArtifact();
@@ -35,7 +40,7 @@ function CustomComponent({
       {customComponents.map((customComponent) => (
         <LoadExternalComponent
           key={customComponent.id}
-          stream={thread as unknown as ReturnType<typeof useStream>}
+          stream={thread as never}
           message={customComponent}
           meta={{ ui: customComponent, artifact }}
         />
@@ -104,9 +109,9 @@ export function AssistantMessage({
   isLoading,
   handleRegenerate,
 }: {
-  message: Message | undefined;
+  message: BaseMessage | undefined;
   isLoading: boolean;
-  handleRegenerate: (parentCheckpoint: Checkpoint | null | undefined) => void;
+  handleRegenerate: (parentCheckpointId: string | undefined) => void;
 }) {
   const content = message?.content ?? [];
   const contentString = getContentString(content);
@@ -121,17 +126,17 @@ export function AssistantMessage({
   const hasNoAIOrToolMessages = !thread.messages.find(
     (m) => m.type === "ai" || m.type === "tool",
   );
-  const meta = message ? thread.getMessagesMetadata(message) : undefined;
+  const meta = useMessageMetadata(thread, message?.id);
   const threadInterrupt = thread.interrupt;
 
-  const parentCheckpoint = meta?.firstSeenState?.parent_checkpoint;
+  const parentCheckpointId = meta?.parentCheckpointId;
   const anthropicStreamedToolCalls = Array.isArray(content)
     ? parseAnthropicStreamedToolCalls(content)
     : undefined;
 
   const hasToolCalls =
     message &&
-    "tool_calls" in message &&
+    isAIMessage(message) &&
     message.tool_calls &&
     message.tool_calls.length > 0;
   const toolCallsHaveContents =
@@ -140,7 +145,7 @@ export function AssistantMessage({
       (tc) => tc.args && Object.keys(tc.args).length > 0,
     );
   const hasAnthropicToolCalls = !!anthropicStreamedToolCalls?.length;
-  const isToolResult = message?.type === "tool";
+  const isToolResult = !!message && isToolMessage(message);
 
   if (isToolResult && hideToolCalls) {
     return null;
@@ -197,17 +202,11 @@ export function AssistantMessage({
                 "opacity-0 group-focus-within:opacity-100 group-hover:opacity-100",
               )}
             >
-              <BranchSwitcher
-                branch={meta?.branch}
-                branchOptions={meta?.branchOptions}
-                onSelect={(branch) => thread.setBranch(branch)}
-                isLoading={isLoading}
-              />
               <CommandBar
                 content={contentString}
                 isLoading={isLoading}
                 isAiMessage={true}
-                handleRegenerate={() => handleRegenerate(parentCheckpoint)}
+                handleRegenerate={() => handleRegenerate(parentCheckpointId)}
               />
             </div>
           </>

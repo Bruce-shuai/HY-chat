@@ -167,7 +167,7 @@ export function ThreadActionsView({
     window.open(studioUrl, "_blank");
   };
 
-  const handleApproveAll = useCallback(() => {
+  const handleApproveAll = useCallback(async () => {
     if (!hasMultipleActions) return;
 
     try {
@@ -175,14 +175,7 @@ export function ThreadActionsView({
         type: "approve",
       }));
 
-      stream.submit(
-        {},
-        {
-          command: {
-            resume: { decisions: allDecisions },
-          },
-        },
-      );
+      await stream.respond({ decisions: allDecisions });
 
       toast("Success", {
         description: "All actions approved successfully.",
@@ -199,7 +192,7 @@ export function ThreadActionsView({
     }
   }, [actionRequests, hasMultipleActions, stream]);
 
-  const handleSubmitAll = useCallback(() => {
+  const handleSubmitAll = useCallback(async () => {
     if (!hasMultipleActions) return;
 
     if (addressedActions.size !== actionRequests.length) {
@@ -222,14 +215,7 @@ export function ThreadActionsView({
         return decision;
       });
 
-      stream.submit(
-        {},
-        {
-          command: {
-            resume: { decisions: allDecisions },
-          },
-        },
-      );
+      await stream.respond({ decisions: allDecisions });
 
       toast("Success", {
         description: "All actions submitted successfully.",
@@ -298,8 +284,8 @@ export function ThreadActionsView({
 
   if (!isValidHitlRequest(interrupt)) {
     return (
-      <div className="flex min-h-full w-full flex-col items-center justify-center rounded-2xl bg-muted/20 p-8">
-        <p className="text-sm text-muted-foreground">
+      <div className="bg-muted/20 flex min-h-full w-full flex-col items-center justify-center rounded-2xl p-8">
+        <p className="text-muted-foreground text-sm">
           Unable to render interrupt. The data provided is not in the expected
           HITL format.
         </p>
@@ -324,7 +310,7 @@ export function ThreadActionsView({
             <Button
               size="sm"
               variant="outline"
-              className="flex items-center gap-1 bg-background"
+              className="bg-background flex items-center gap-1"
               onClick={handleOpenInStudio}
             >
               Studio
@@ -342,7 +328,7 @@ export function ThreadActionsView({
       <div className="flex w-full flex-row flex-wrap items-center justify-start gap-2">
         <Button
           variant="outline"
-          className="border-gray-500 bg-background font-normal text-foreground"
+          className="bg-background text-foreground border-gray-500 font-normal"
           onClick={handleResolve}
           disabled={actionsDisabled}
         >
@@ -351,7 +337,7 @@ export function ThreadActionsView({
         {hasMultipleActions && allAllowApprove && (
           <Button
             variant="outline"
-            className="border-gray-500 bg-background font-normal text-foreground"
+            className="bg-background text-foreground border-gray-500 font-normal"
             onClick={handleApproveAll}
             disabled={actionsDisabled}
           >

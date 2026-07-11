@@ -5,15 +5,9 @@ import React, {
   useState,
   useEffect,
 } from "react";
-import { useStream } from "@langchain/langgraph-sdk/react";
-import { type Message } from "@langchain/langgraph-sdk";
-import {
-  uiMessageReducer,
-  isUIMessage,
-  isRemoveUIMessage,
-  type UIMessage,
-  type RemoveUIMessage,
-} from "@langchain/langgraph-sdk/react-ui";
+import { useStream } from "@langchain/react";
+import { type BaseMessage } from "@langchain/core/messages";
+import { type UIMessage } from "@langchain/langgraph-sdk/react-ui";
 import { useQueryState } from "nuqs";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -28,23 +22,13 @@ import { toast } from "sonner";
 import { useAuth } from "./Auth";
 
 export type StateType = {
-  messages: Message[];
+  messages: BaseMessage[];
   ui?: UIMessage[];
+  context?: Record<string, unknown>;
   selected_model?: string;
 };
 
-const useTypedStream = useStream<
-  StateType,
-  {
-    UpdateType: {
-      messages?: Message[] | Message | string;
-      ui?: (UIMessage | RemoveUIMessage)[] | UIMessage | RemoveUIMessage;
-      context?: Record<string, unknown>;
-      selected_model?: string;
-    };
-    CustomEventType: UIMessage | RemoveUIMessage;
-  }
->;
+const useTypedStream = useStream<StateType>;
 
 type StreamContextType = ReturnType<typeof useTypedStream>;
 const StreamContext = createContext<StreamContextType | undefined>(undefined);
@@ -102,15 +86,6 @@ const StreamSession = ({
       ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
     },
     threadId: threadId ?? null,
-    fetchStateHistory: true,
-    onCustomEvent: (event, options) => {
-      if (isUIMessage(event) || isRemoveUIMessage(event)) {
-        options.mutate((prev) => {
-          const ui = uiMessageReducer(prev.ui ?? [], event);
-          return { ...prev, ui };
-        });
-      }
-    },
     onThreadId: (id) => {
       setThreadId(id);
       // Refetch threads list when thread ID changes.

@@ -84,18 +84,9 @@ export default function useInterruptedActions({
     }
   }, [interrupt]);
 
-  const resumeRun = (decisions: Decision[]): boolean => {
+  const resumeRun = async (decisions: Decision[]): Promise<boolean> => {
     try {
-      thread.submit(
-        {},
-        {
-          command: {
-            resume: {
-              decisions,
-            },
-          },
-        },
-      );
+      await thread.respond({ decisions });
       return true;
     } catch (error) {
       console.error("Error sending human response", error);
@@ -139,7 +130,7 @@ export default function useInterruptedActions({
       setLoading(true);
       setStreaming(true);
 
-      const resumedSuccessfully = resumeRun([decision]);
+      const resumedSuccessfully = await resumeRun([decision]);
       if (!resumedSuccessfully) {
         errorOccurred = true;
         return;
@@ -188,14 +179,7 @@ export default function useInterruptedActions({
     initialHumanInterruptEditValue.current = {};
 
     try {
-      thread.submit(
-        {},
-        {
-          command: {
-            goto: END,
-          },
-        },
-      );
+      await thread.respond(null, { goto: END });
 
       toast("Success", {
         description: "Marked thread as resolved.",

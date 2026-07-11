@@ -1,10 +1,11 @@
 import { useStreamContext } from "@/providers/Stream";
-import { Message } from "@langchain/langgraph-sdk";
+import { HumanMessage as HumanMessageClass } from "@langchain/core/messages";
+import { useMessageMetadata } from "@langchain/react";
 import { useState } from "react";
 import { getContentString } from "../utils";
 import { cn } from "@/lib/utils";
 import { Textarea } from "@/components/ui/textarea";
-import { BranchSwitcher, CommandBar } from "./shared";
+import { CommandBar } from "./shared";
 import { MultimodalPreview } from "@/components/thread/MultimodalPreview";
 import { isBase64ContentBlock } from "@/lib/multimodal-utils";
 
@@ -38,12 +39,12 @@ export function HumanMessage({
   message,
   isLoading,
 }: {
-  message: Message;
+  message: HumanMessageClass;
   isLoading: boolean;
 }) {
   const thread = useStreamContext();
-  const meta = thread.getMessagesMetadata(message);
-  const parentCheckpoint = meta?.firstSeenState?.parent_checkpoint;
+  const meta = useMessageMetadata(thread, message.id);
+  const parentCheckpointId = meta?.parentCheckpointId;
 
   const [isEditing, setIsEditing] = useState(false);
   const [value, setValue] = useState("");
@@ -52,23 +53,11 @@ export function HumanMessage({
   const handleSubmitEdit = () => {
     setIsEditing(false);
 
-    const newMessage: Message = { type: "human", content: value };
+    const newMessage = new HumanMessageClass(value);
     thread.submit(
       { messages: [newMessage] },
       {
-        checkpoint: parentCheckpoint,
-        streamMode: ["values"],
-        streamSubgraphs: true,
-        streamResumable: true,
-        optimisticValues: (prev) => {
-          const values = meta?.firstSeenState?.values;
-          if (!values) return prev;
-
-          return {
-            ...values,
-            messages: [...(values.messages ?? []), newMessage],
-          };
-        },
+        forkFrom: parentCheckpointId,
       },
     );
   };
@@ -125,12 +114,6 @@ export function HumanMessage({
             isEditing && "opacity-100",
           )}
         >
-          <BranchSwitcher
-            branch={meta?.branch}
-            branchOptions={meta?.branchOptions}
-            onSelect={(branch) => thread.setBranch(branch)}
-            isLoading={isLoading}
-          />
           <CommandBar
             isLoading={isLoading}
             content={contentString}
