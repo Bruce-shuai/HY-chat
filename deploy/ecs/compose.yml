@@ -8,7 +8,7 @@ services:
       args:
         NEXT_PUBLIC_API_URL: /api
         NEXT_PUBLIC_ASSISTANT_ID: hy-chat
-        NEXT_PUBLIC_BACKEND_URL: https://api.chat.hy-ai.xyz
+        NEXT_PUBLIC_BACKEND_URL: /backend
     container_name: hy-chat-frontend
     environment:
       LANGGRAPH_API_URL: http://agent:2024
