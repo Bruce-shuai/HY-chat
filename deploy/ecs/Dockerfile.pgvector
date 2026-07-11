@@ -1,6 +1,7 @@
 FROM public.ecr.aws/docker/library/postgres:16-bookworm AS builder
 
 ARG PGVECTOR_VERSION=v0.8.2
+COPY deploy/ecs/vendor/pgvector-v0.8.2.tar.gz /tmp/pgvector.tar.gz
 RUN sed -ri \
         's@deb.debian.org/debian@mirrors.aliyun.com/debian@g; s@security.debian.org/debian-security@mirrors.aliyun.com/debian-security@g' \
         /etc/apt/sources.list.d/debian.sources \
@@ -8,10 +9,11 @@ RUN sed -ri \
     && apt-get install -y --no-install-recommends \
         build-essential \
         ca-certificates \
-        git \
         postgresql-server-dev-16 \
-    && git clone --branch "${PGVECTOR_VERSION}" --depth 1 \
-        https://github.com/pgvector/pgvector.git /tmp/pgvector \
+    && echo '69f4019389af05dc1c9548deb8628e62878e6e207c03907f2b8af2016472cdaa  /tmp/pgvector.tar.gz' \
+        | sha256sum --check --strict \
+    && mkdir /tmp/pgvector \
+    && tar -xzf /tmp/pgvector.tar.gz --strip-components=1 -C /tmp/pgvector \
     && make -C /tmp/pgvector OPTFLAGS="" \
     && make -C /tmp/pgvector install DESTDIR=/tmp/pgvector-stage
 
