@@ -36,8 +36,8 @@ export function LoginScreen() {
   };
 
   return (
-    <main className="flex min-h-dvh items-center justify-center bg-slate-50 p-4 sm:p-8">
-      <div className="grid w-full max-w-4xl overflow-hidden rounded-3xl border bg-white shadow-xl md:grid-cols-[1.05fr_1fr]">
+    <main className="flex min-h-dvh items-center justify-center bg-muted/30 p-4 sm:p-8">
+      <div className="grid w-full max-w-4xl overflow-hidden rounded-3xl border bg-background shadow-xl md:grid-cols-[1.05fr_1fr]">
         <section className="hidden bg-slate-950 p-10 text-white md:flex md:flex-col md:justify-between">
           <div className="flex items-center gap-3 text-xl font-semibold">
             <MessageSquareText className="size-7" /> HY-chat
@@ -57,12 +57,12 @@ export function LoginScreen() {
               <MessageSquareText /> HY-chat
             </div>
           </div>
-          <div className="mb-6 flex rounded-xl bg-slate-100 p-1">
+          <div className="mb-6 flex rounded-xl bg-muted p-1">
             {(["login", "register"] as const).map((item) => (
               <button
                 key={item}
                 onClick={() => setMode(item)}
-                className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium ${mode === item ? "bg-white shadow-sm" : "text-slate-500"}`}
+                className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium ${mode === item ? "bg-background shadow-sm" : "text-muted-foreground"}`}
               >
                 {item === "login" ? "登录" : "注册"}
               </button>
@@ -71,7 +71,7 @@ export function LoginScreen() {
           <h2 className="text-2xl font-semibold">
             {mode === "login" ? "欢迎回来" : "创建账号"}
           </h2>
-          <p className="mt-1 text-sm text-slate-500">
+          <p className="mt-1 text-sm text-muted-foreground">
             首个注册账号会自动获得管理员权限。
           </p>
           <form
@@ -109,7 +109,7 @@ export function LoginScreen() {
           </form>
           {accounts.length > 0 && (
             <div className="mt-8 border-t pt-5">
-              <p className="mb-3 text-xs font-medium tracking-wide text-slate-400 uppercase">
+              <p className="mb-3 text-xs font-medium tracking-wide text-muted-foreground uppercase">
                 已保存账号
               </p>
               <div className="space-y-2">
@@ -117,14 +117,14 @@ export function LoginScreen() {
                   <button
                     key={account.user.id}
                     onClick={() => switchAccount(account.user.id)}
-                    className="flex w-full items-center gap-3 rounded-xl border p-3 text-left hover:bg-slate-50"
+                    className="flex w-full items-center gap-3 rounded-xl border p-3 text-left hover:bg-muted/30"
                   >
-                    <UserRound className="size-5 text-slate-500" />
+                    <UserRound className="size-5 text-muted-foreground" />
                     <span className="min-w-0">
                       <span className="block truncate text-sm font-medium">
                         {account.user.display_name}
                       </span>
-                      <span className="block truncate text-xs text-slate-500">
+                      <span className="block truncate text-xs text-muted-foreground">
                         {account.user.email}
                       </span>
                     </span>

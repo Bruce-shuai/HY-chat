@@ -302,10 +302,10 @@ export function Thread() {
   );
 
   return (
-    <div className="flex h-dvh w-full overflow-hidden bg-white">
+    <div className="flex h-dvh w-full overflow-hidden bg-background">
       <div className="relative hidden lg:flex">
         <motion.div
-          className="absolute z-20 h-full overflow-hidden border-r bg-white"
+          className="absolute z-20 h-full overflow-hidden border-r bg-background"
           style={{ width: 300 }}
           animate={
             isLargeScreen
@@ -359,7 +359,7 @@ export function Thread() {
               <div>
                 {(!chatHistoryOpen || !isLargeScreen) && (
                   <Button
-                    className="hover:bg-gray-100"
+                    className="hover:bg-muted"
                     variant="ghost"
                     onClick={() => setChatHistoryOpen((p) => !p)}
                   >
@@ -382,7 +382,7 @@ export function Thread() {
                 <div className="absolute left-0 z-10">
                   {(!chatHistoryOpen || !isLargeScreen) && (
                     <Button
-                      className="hover:bg-gray-100"
+                      className="hover:bg-muted"
                       variant="ghost"
                       onClick={() => setChatHistoryOpen((p) => !p)}
                     >
@@ -436,7 +436,7 @@ export function Thread() {
           <StickToBottom className="relative flex-1 overflow-hidden">
             <StickyToBottomContent
               className={cn(
-                "absolute inset-0 overflow-y-scroll px-4 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-300 [&::-webkit-scrollbar-track]:bg-transparent",
+                "absolute inset-0 overflow-y-scroll px-4 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border [&::-webkit-scrollbar-track]:bg-transparent",
                 !chatStarted && "mt-[25vh] flex flex-col items-stretch",
                 chatStarted && "grid grid-rows-[1fr_auto]",
               )}
@@ -477,7 +477,7 @@ export function Thread() {
                 </>
               }
               footer={
-                <div className="sticky bottom-0 flex flex-col items-center gap-6 bg-white px-2 sm:px-4">
+                <div className="sticky bottom-0 flex flex-col items-center gap-6 bg-background px-2 sm:px-4">
                   {!chatStarted && (
                     <div className="flex items-center gap-3">
                       <LangGraphLogoSVG className="h-8 flex-shrink-0" />
@@ -528,7 +528,7 @@ export function Thread() {
                       />
 
                       <div className="flex flex-wrap items-center gap-2 p-2 pt-3 sm:gap-4">
-                        <label className="flex items-center gap-2 text-sm text-gray-600">
+                        <label className="flex items-center gap-2 text-sm text-muted-foreground">
                           <span className="hidden sm:inline">模型</span>
                           <select
                             aria-label="Select model"
@@ -536,7 +536,7 @@ export function Thread() {
                             onChange={(event) =>
                               changeModel(event.target.value)
                             }
-                            className="max-w-36 rounded-md border bg-white px-2 py-1 text-sm text-gray-800 outline-none focus:ring-2 focus:ring-gray-300 sm:max-w-none"
+                            className="max-w-36 rounded-md border bg-background px-2 py-1 text-sm text-foreground outline-none focus:ring-2 focus:ring-gray-300 sm:max-w-none"
                           >
                             {!models.length && (
                               <option value="">Default model</option>
@@ -561,7 +561,7 @@ export function Thread() {
                             />
                             <Label
                               htmlFor="render-tool-calls"
-                              className="text-sm text-gray-600"
+                              className="text-sm text-muted-foreground"
                             >
                               <span className="hidden sm:inline">
                                 隐藏工具调用
@@ -573,8 +573,8 @@ export function Thread() {
                           htmlFor="file-input"
                           className="flex cursor-pointer items-center gap-2"
                         >
-                          <Plus className="size-5 text-gray-600" />
-                          <span className="hidden text-sm text-gray-600 md:inline">
+                          <Plus className="size-5 text-muted-foreground" />
+                          <span className="hidden text-sm text-muted-foreground md:inline">
                             上传附件
                           </span>
                         </Label>
@@ -590,7 +590,7 @@ export function Thread() {
                           type="button"
                           onClick={() => knowledgeInputRef.current?.click()}
                           disabled={knowledgeUploading}
-                          className="flex items-center gap-2 text-sm text-gray-600 disabled:opacity-50"
+                          className="flex items-center gap-2 text-sm text-muted-foreground disabled:opacity-50"
                         >
                           {knowledgeUploading ? (
                             <LoaderCircle className="size-5 animate-spin" />
@@ -640,7 +640,7 @@ export function Thread() {
           className={cn(
             "relative flex-col border-l",
             artifactOpen
-              ? "fixed inset-0 z-40 flex bg-white lg:relative lg:z-auto"
+              ? "fixed inset-0 z-40 flex bg-background lg:relative lg:z-auto"
               : "hidden lg:flex",
           )}
         >

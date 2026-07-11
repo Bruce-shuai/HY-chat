@@ -97,12 +97,12 @@ function ImageStudioContent() {
   };
 
   return (
-    <main className="min-h-dvh bg-slate-50">
-      <header className="sticky top-0 z-20 border-b bg-white/90 backdrop-blur">
+    <main className="min-h-dvh bg-muted/30">
+      <header className="sticky top-0 z-20 border-b bg-background/90 backdrop-blur">
         <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-3 sm:px-6">
           <Link
             href="/"
-            className="rounded-lg p-2 hover:bg-slate-100"
+            className="rounded-lg p-2 hover:bg-muted"
           >
             <ArrowLeft className="size-5" />
           </Link>
@@ -115,11 +115,11 @@ function ImageStudioContent() {
       <div className="mx-auto grid max-w-7xl gap-5 p-4 sm:p-6 lg:grid-cols-[420px_minmax(0,1fr)]">
         <form
           onSubmit={submit}
-          className="h-fit space-y-5 rounded-2xl border bg-white p-5 lg:sticky lg:top-20"
+          className="h-fit space-y-5 rounded-2xl border bg-background p-5 lg:sticky lg:top-20"
         >
           <div>
             <h2 className="text-lg font-semibold">生成设置</h2>
-            <p className="mt-1 text-sm text-slate-500">
+            <p className="mt-1 text-sm text-muted-foreground">
               不上传来源图时是文生图；上传后自动切换为图生图。
             </p>
           </div>
@@ -156,7 +156,7 @@ function ImageStudioContent() {
             <button
               type="button"
               onClick={() => sourceInput.current?.click()}
-              className="flex min-h-36 w-full items-center justify-center overflow-hidden rounded-xl border border-dashed bg-slate-50 hover:bg-slate-100"
+              className="flex min-h-36 w-full items-center justify-center overflow-hidden rounded-xl border border-dashed bg-muted/30 hover:bg-muted"
             >
               {sourcePreview ? (
                 <img
@@ -165,7 +165,7 @@ function ImageStudioContent() {
                   className="max-h-64 w-full object-contain"
                 />
               ) : (
-                <span className="flex flex-col items-center gap-2 text-sm text-slate-500">
+                <span className="flex flex-col items-center gap-2 text-sm text-muted-foreground">
                   <Upload className="size-6" /> 上传 JPG、PNG 或 WebP
                 </span>
               )}
@@ -185,7 +185,7 @@ function ImageStudioContent() {
               <select
                 name="provider"
                 defaultValue="auto"
-                className="mt-2 h-10 w-full rounded-lg border bg-white px-2 text-sm"
+                className="mt-2 h-10 w-full rounded-lg border bg-background px-2 text-sm"
               >
                 <option value="auto">自动选择</option>
                 <option value="zhipu">智谱</option>
@@ -197,7 +197,7 @@ function ImageStudioContent() {
               尺寸
               <select
                 name="size"
-                className="mt-2 h-10 w-full rounded-lg border bg-white px-2 text-sm"
+                className="mt-2 h-10 w-full rounded-lg border bg-background px-2 text-sm"
               >
                 {IMAGE_SIZES.map((size) => (
                   <option key={size}>{size}</option>
@@ -208,7 +208,7 @@ function ImageStudioContent() {
               质量
               <select
                 name="quality"
-                className="mt-2 h-10 w-full rounded-lg border bg-white px-2 text-sm"
+                className="mt-2 h-10 w-full rounded-lg border bg-background px-2 text-sm"
               >
                 {IMAGE_QUALITIES.map((quality) => (
                   <option key={quality}>{quality}</option>
@@ -241,7 +241,7 @@ function ImageStudioContent() {
         </form>
 
         <div className="space-y-5">
-          <section className="flex min-h-[460px] items-center justify-center overflow-hidden rounded-2xl border bg-white p-4">
+          <section className="flex min-h-[460px] items-center justify-center overflow-hidden rounded-2xl border bg-background p-4">
             {resultPreview ? (
               <img
                 src={resultPreview}
@@ -249,17 +249,17 @@ function ImageStudioContent() {
                 className="max-h-[720px] w-full object-contain"
               />
             ) : (
-              <div className="text-center text-slate-400">
+              <div className="text-center text-muted-foreground">
                 <ImageIcon className="mx-auto mb-3 size-12" />
                 <p className="text-sm">生成结果将在这里显示</p>
               </div>
             )}
           </section>
 
-          <section className="rounded-2xl border bg-white p-5">
+          <section className="rounded-2xl border bg-background p-5">
             <h2 className="mb-4 font-semibold">最近生成</h2>
             {history.length === 0 ? (
-              <p className="text-sm text-slate-500">还没有图片生成记录。</p>
+              <p className="text-sm text-muted-foreground">还没有图片生成记录。</p>
             ) : (
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 {history.map((item) => (
@@ -270,18 +270,18 @@ function ImageStudioContent() {
                     onClick={() =>
                       item.output_file_id && loadOutput(item.output_file_id)
                     }
-                    className="rounded-xl border p-3 text-left hover:bg-slate-50 disabled:opacity-60"
+                    className="rounded-xl border p-3 text-left hover:bg-muted/30 disabled:opacity-60"
                   >
                     <div className="mb-2 flex items-center justify-between gap-2">
-                      <span className="rounded-full bg-slate-100 px-2 py-1 text-xs">
+                      <span className="rounded-full bg-muted px-2 py-1 text-xs">
                         {item.mode === "image_to_image" ? "图生图" : "文生图"}
                       </span>
-                      <span className="text-xs text-slate-500">
+                      <span className="text-xs text-muted-foreground">
                         {item.provider}
                       </span>
                     </div>
                     <p className="line-clamp-2 text-sm">{item.prompt}</p>
-                    <p className="mt-2 truncate text-xs text-slate-400">
+                    <p className="mt-2 truncate text-xs text-muted-foreground">
                       {item.model}
                     </p>
                   </button>

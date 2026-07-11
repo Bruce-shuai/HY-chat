@@ -50,12 +50,12 @@ function TraceContent() {
   };
 
   return (
-    <main className="min-h-dvh bg-slate-50">
-      <header className="sticky top-0 z-20 border-b bg-white/90 backdrop-blur">
+    <main className="min-h-dvh bg-muted/30">
+      <header className="sticky top-0 z-20 border-b bg-background/90 backdrop-blur">
         <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-3 sm:px-6">
           <Link
             href="/"
-            className="rounded-lg p-2 hover:bg-slate-100"
+            className="rounded-lg p-2 hover:bg-muted"
             aria-label="返回聊天"
           >
             <ArrowLeft className="size-5" />
@@ -63,7 +63,7 @@ function TraceContent() {
           <Activity className="size-5" />
           <div className="min-w-0 flex-1">
             <h1 className="font-semibold">运行 Trace</h1>
-            <p className="truncate text-xs text-slate-500">{user?.email}</p>
+            <p className="truncate text-xs text-muted-foreground">{user?.email}</p>
           </div>
           <AccountMenu />
         </div>
@@ -88,11 +88,11 @@ function TraceContent() {
             刷新
           </Button>
         </div>
-        <section className="overflow-hidden rounded-2xl border bg-white">
+        <section className="overflow-hidden rounded-2xl border bg-background">
           {loading ? (
-            <p className="p-8 text-center text-sm text-slate-500">加载中…</p>
+            <p className="p-8 text-center text-sm text-muted-foreground">加载中…</p>
           ) : traces.length === 0 ? (
-            <p className="p-8 text-center text-sm text-slate-500">
+            <p className="p-8 text-center text-sm text-muted-foreground">
               还没有 Trace，发送一条消息后会出现在这里。
             </p>
           ) : (
@@ -101,7 +101,7 @@ function TraceContent() {
                 <button
                   key={trace.id}
                   onClick={() => open(trace)}
-                  className="grid w-full gap-2 p-4 text-left hover:bg-slate-50 sm:grid-cols-[minmax(0,1fr)_110px_110px_180px] sm:items-center"
+                  className="grid w-full gap-2 p-4 text-left hover:bg-muted/30 sm:grid-cols-[minmax(0,1fr)_110px_110px_180px] sm:items-center"
                 >
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
@@ -110,18 +110,18 @@ function TraceContent() {
                       />
                       <p className="truncate font-medium">{trace.name}</p>
                     </div>
-                    <p className="mt-1 truncate text-xs text-slate-500">
+                    <p className="mt-1 truncate text-xs text-muted-foreground">
                       {trace.model_name || trace.tool_name || trace.span_type}
                     </p>
                   </div>
-                  <span className="flex items-center gap-1 text-xs text-slate-500">
+                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
                     <Clock className="size-3.5" /> {trace.latency_ms ?? 0} ms
                   </span>
-                  <span className="flex items-center gap-1 text-xs text-slate-500">
+                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
                     <Database className="size-3.5" /> {trace.total_tokens}{" "}
                     tokens
                   </span>
-                  <time className="text-xs text-slate-500">
+                  <time className="text-xs text-muted-foreground">
                     {new Date(trace.started_at).toLocaleString()}
                   </time>
                 </button>
@@ -136,17 +136,17 @@ function TraceContent() {
           onClick={() => setSelected(null)}
         >
           <aside
-            className="h-full w-full overflow-y-auto bg-white p-5 shadow-2xl sm:max-w-2xl"
+            className="h-full w-full overflow-y-auto bg-background p-5 shadow-2xl sm:max-w-2xl"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="mb-5 flex items-start justify-between gap-3">
               <div>
                 <h2 className="text-lg font-semibold">{selected.name}</h2>
-                <p className="text-xs text-slate-500">{selected.id}</p>
+                <p className="text-xs text-muted-foreground">{selected.id}</p>
               </div>
               <button
                 onClick={() => setSelected(null)}
-                className="rounded-lg p-2 hover:bg-slate-100"
+                className="rounded-lg p-2 hover:bg-muted"
               >
                 <X className="size-5" />
               </button>

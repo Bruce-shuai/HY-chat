@@ -4,6 +4,7 @@ import { Inter } from "next/font/google";
 import React from "react";
 import { NuqsAdapter } from "nuqs/adapters/next/app";
 import { AuthProvider } from "@/providers/Auth";
+import { ThemeProvider } from "@/providers/Theme";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -22,11 +23,18 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="zh-CN">
+    <html lang="zh-CN" suppressHydrationWarning>
       <body className={inter.className}>
-        <NuqsAdapter>
-          <AuthProvider>{children}</AuthProvider>
-        </NuqsAdapter>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <NuqsAdapter>
+            <AuthProvider>{children}</AuthProvider>
+          </NuqsAdapter>
+        </ThemeProvider>
       </body>
     </html>
   );

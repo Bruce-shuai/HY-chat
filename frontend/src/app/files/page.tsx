@@ -83,12 +83,12 @@ function FilesContent() {
   };
 
   return (
-    <main className="min-h-dvh bg-slate-50">
-      <header className="sticky top-0 z-20 border-b bg-white/90 backdrop-blur">
+    <main className="min-h-dvh bg-muted/30">
+      <header className="sticky top-0 z-20 border-b bg-background/90 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3 sm:px-6">
           <Link
             href="/"
-            className="rounded-lg p-2 hover:bg-slate-100"
+            className="rounded-lg p-2 hover:bg-muted"
           >
             <ArrowLeft className="size-5" />
           </Link>
@@ -98,10 +98,10 @@ function FilesContent() {
         </div>
       </header>
       <div className="mx-auto max-w-6xl p-4 sm:p-6">
-        <section className="mb-5 flex flex-col justify-between gap-3 rounded-2xl border bg-white p-5 sm:flex-row sm:items-center">
+        <section className="mb-5 flex flex-col justify-between gap-3 rounded-2xl border bg-background p-5 sm:flex-row sm:items-center">
           <div>
             <h2 className="font-semibold">图片与文件</h2>
-            <p className="mt-1 text-sm text-slate-500">
+            <p className="mt-1 text-sm text-muted-foreground">
               文件按账号隔离，可使用本地卷或 S3 兼容对象存储。
             </p>
           </div>
@@ -120,9 +120,9 @@ function FilesContent() {
             onChange={upload}
           />
         </section>
-        <section className="overflow-hidden rounded-2xl border bg-white">
+        <section className="overflow-hidden rounded-2xl border bg-background">
           {files.length === 0 ? (
-            <p className="p-10 text-center text-sm text-slate-500">
+            <p className="p-10 text-center text-sm text-muted-foreground">
               还没有文件。
             </p>
           ) : (
@@ -132,21 +132,21 @@ function FilesContent() {
                   key={item.id}
                   className="flex items-center gap-3 p-4"
                 >
-                  <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-slate-100">
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted">
                     <File className="size-5" />
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">
                       {item.filename}
                     </p>
-                    <p className="mt-1 text-xs text-slate-500">
+                    <p className="mt-1 text-xs text-muted-foreground">
                       {formatSize(item.size_bytes)} · {item.storage_backend} ·{" "}
                       {new Date(item.created_at).toLocaleString()}
                     </p>
                   </div>
                   <button
                     onClick={() => download(item)}
-                    className="rounded-lg p-2 hover:bg-slate-100"
+                    className="rounded-lg p-2 hover:bg-muted"
                     title="下载"
                   >
                     <Download className="size-4" />
