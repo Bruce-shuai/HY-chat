@@ -1,0 +1,10 @@
+{
+  "dependencies": ["."],
+  "graphs": {
+    "hy-chat": "./app/agents/chat.py:graph"
+  },
+  "auth": {
+    "path": "./app/auth/langgraph.py:auth"
+  },
+  "env": ".env"
+}

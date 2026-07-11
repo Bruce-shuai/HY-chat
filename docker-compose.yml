@@ -1,0 +1,101 @@
+services:
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_URL: ${AGENT_PUBLIC_URL:-/api}
+        NEXT_PUBLIC_ASSISTANT_ID: hy-chat
+        NEXT_PUBLIC_BACKEND_URL: ${BACKEND_PUBLIC_URL:-http://localhost:8000}
+    container_name: hy-chat-ui
+    ports:
+      - "3000:3000"
+    environment:
+      LANGGRAPH_API_URL: http://agent:2024
+      LANGSMITH_API_KEY: ${LANGSMITH_API_KEY:-}
+    depends_on:
+      - agent
+      - app
+    restart: unless-stopped
+
+  agent:
+    build: .
+    container_name: hy-chat-agent
+    command: ["langgraph", "dev", "--host", "0.0.0.0", "--port", "2024", "--no-browser", "--no-reload"]
+    env_file:
+      - .env
+    expose:
+      - "2024"
+    volumes:
+      - ./workspace:/workspace
+      - rag_data:/data/rag
+      - storage_data:/data/storage
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      app:
+        condition: service_healthy
+    restart: unless-stopped
+
+  app:
+    build: .
+    container_name: hy-chat-api
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./workspace:/workspace
+      - rag_data:/data/rag
+      - storage_data:/data/storage
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: hy-chat-postgres
+    environment:
+      POSTGRES_USER: hy_chat
+      POSTGRES_PASSWORD: hy_chat_password
+      POSTGRES_DB: hy_chat_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hy_chat -d hy_chat_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7
+    container_name: hy-chat-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+  rag_data:
+  storage_data:

@@ -1,0 +1,63 @@
+<mxGraphModel adaptiveColors="auto" dx="1600" dy="1120" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1120" math="0" shadow="0">
+  <root>
+    <mxCell id="0"/>
+    <mxCell id="1" parent="0"/>
+    <mxCell id="title" value="HY-chat Folder Structure" style="text;html=1;strokeColor=none;fillColor=none;fontSize=34;fontStyle=1;align=left;verticalAlign=middle;" vertex="1" parent="1">
+      <mxGeometry x="80" y="60" width="700" height="50" as="geometry"/>
+    </mxCell>
+    <mxCell id="root" value="HY-chat/&#xa;project root" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d0d5dd;fontSize=22;fontStyle=1;shadow=1;arcSize=6;" vertex="1" parent="1">
+      <mxGeometry x="80" y="150" width="1440" height="130" as="geometry"/>
+    </mxCell>
+    <mxCell id="app" value="app/&#xa;application package" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#b9c7d8;fontSize=22;fontStyle=1;shadow=1;arcSize=6;" vertex="1" parent="1">
+      <mxGeometry x="380" y="360" width="840" height="655" as="geometry"/>
+    </mxCell>
+    <mxCell id="scripts" value="scripts/&#xa;- smoke_test.sh" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d0d5dd;fontSize=16;align=left;spacingLeft=18;arcSize=6;" vertex="1" parent="1">
+      <mxGeometry x="110" y="360" width="220" height="170" as="geometry"/>
+    </mxCell>
+    <mxCell id="workspace" value="workspace/&#xa;- README.md&#xa;- .gitkeep" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d0d5dd;fontSize=16;align=left;spacingLeft=18;arcSize=6;" vertex="1" parent="1">
+      <mxGeometry x="1270" y="360" width="220" height="170" as="geometry"/>
+    </mxCell>
+    <mxCell id="rootSupport" value="root support&#xa;- README.md&#xa;- Dockerfile&#xa;- docker-compose.yml&#xa;- pyproject.toml&#xa;- requirements.txt&#xa;- uv.lock&#xa;- .env.example" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d0d5dd;fontSize=15;align=left;spacingLeft=18;arcSize=6;" vertex="1" parent="1">
+      <mxGeometry x="110" y="580" width="220" height="236" as="geometry"/>
+    </mxCell>
+    <mxCell id="omitted" value="frontend/&#xa;- src/app/&#xa;- src/components/&#xa;- src/providers/&#xa;- package.json&#xa;- Dockerfile" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d0d5dd;fontSize=15;align=left;spacingLeft=18;arcSize=6;" vertex="1" parent="1">
+      <mxGeometry x="1270" y="580" width="220" height="236" as="geometry"/>
+    </mxCell>
+    <mxCell id="main" value="main.py&#xa;__init__.py" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fbfdff;strokeColor=#d0d5dd;fontSize=15;align=left;spacingLeft=18;arcSize=6;" vertex="1" parent="1">
+      <mxGeometry x="980" y="400" width="184" height="94" as="geometry"/>
+    </mxCell>
+    <mxCell id="api" value="api/&#xa;- routers/&#xa;- dependencies.py" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fbfdff;strokeColor=#d0d5dd;fontSize=15;align=left;spacingLeft=18;arcSize=6;" vertex="1" parent="1">
+      <mxGeometry x="420" y="520" width="230" height="150" as="geometry"/>
+    </mxCell>
+    <mxCell id="agents" value="agents/&#xa;- graph.py&#xa;- chat.py" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fbfdff;strokeColor=#d0d5dd;fontSize=15;align=left;spacingLeft=18;arcSize=6;" vertex="1" parent="1">
+      <mxGeometry x="690" y="520" width="230" height="150" as="geometry"/>
+    </mxCell>
+    <mxCell id="core" value="core/&#xa;- config.py&#xa;- __init__.py" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fbfdff;strokeColor=#d0d5dd;fontSize=15;align=left;spacingLeft=18;arcSize=6;" vertex="1" parent="1">
+      <mxGeometry x="960" y="520" width="230" height="150" as="geometry"/>
+    </mxCell>
+    <mxCell id="db" value="db/&#xa;- models.py&#xa;- session.py&#xa;- init_db.py&#xa;- __init__.py" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fbfdff;strokeColor=#d0d5dd;fontSize=15;align=left;spacingLeft=18;arcSize=6;" vertex="1" parent="1">
+      <mxGeometry x="420" y="705" width="230" height="192" as="geometry"/>
+    </mxCell>
+    <mxCell id="schemas" value="rag/&#xa;- service.py&#xa;- loaders.py&#xa;- embeddings.py" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fbfdff;strokeColor=#d0d5dd;fontSize=15;align=left;spacingLeft=18;arcSize=6;" vertex="1" parent="1">
+      <mxGeometry x="690" y="705" width="230" height="192" as="geometry"/>
+    </mxCell>
+    <mxCell id="models" value="cache/&#xa;- service.py&#xa;- __init__.py" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fbfdff;strokeColor=#d0d5dd;fontSize=15;align=left;spacingLeft=18;arcSize=6;" vertex="1" parent="1">
+      <mxGeometry x="960" y="705" width="230" height="192" as="geometry"/>
+    </mxCell>
+    <mxCell id="services" value="models/&#xa;catalog.py  router.py" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fbfdff;strokeColor=#d0d5dd;fontSize=14;align=left;spacingLeft=18;arcSize=6;" vertex="1" parent="1">
+      <mxGeometry x="420" y="925" width="365" height="70" as="geometry"/>
+    </mxCell>
+    <mxCell id="tools" value="tools/&#xa;registry.py  external.py  rag_tools.py" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fbfdff;strokeColor=#d0d5dd;fontSize=14;align=left;spacingLeft=18;arcSize=6;" vertex="1" parent="1">
+      <mxGeometry x="825" y="925" width="365" height="70" as="geometry"/>
+    </mxCell>
+    <mxCell id="e1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#98a2b3;endArrow=none;" edge="1" parent="1" source="root" target="app">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="e2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#98a2b3;endArrow=none;" edge="1" parent="1" source="root" target="scripts">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="e3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#98a2b3;endArrow=none;" edge="1" parent="1" source="root" target="workspace">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+  </root>
+</mxGraphModel>

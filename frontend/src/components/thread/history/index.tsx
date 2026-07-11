@@ -1,0 +1,158 @@
+import { Button } from "@/components/ui/button";
+import { useThreads } from "@/providers/Thread";
+import { Thread } from "@langchain/langgraph-sdk";
+import { useEffect } from "react";
+
+import { getContentString } from "../utils";
+import { useQueryState, parseAsBoolean } from "nuqs";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  MessageSquarePlus,
+  PanelRightOpen,
+  PanelRightClose,
+} from "lucide-react";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
+
+function ThreadList({
+  threads,
+  onThreadClick,
+}: {
+  threads: Thread[];
+  onThreadClick?: (threadId: string) => void;
+}) {
+  const [threadId, setThreadId] = useQueryState("threadId");
+
+  return (
+    <div className="flex h-full w-full flex-col items-start justify-start gap-2 overflow-y-scroll [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-300 [&::-webkit-scrollbar-track]:bg-transparent">
+      {threads.map((t) => {
+        let itemText = t.thread_id;
+        if (
+          typeof t.values === "object" &&
+          t.values &&
+          "messages" in t.values &&
+          Array.isArray(t.values.messages) &&
+          t.values.messages?.length > 0
+        ) {
+          const firstMessage = t.values.messages[0];
+          itemText = getContentString(firstMessage.content);
+        }
+        return (
+          <div
+            key={t.thread_id}
+            className="w-full px-1"
+          >
+            <Button
+              variant="ghost"
+              className={`w-full items-start justify-start text-left font-normal ${t.thread_id === threadId ? "bg-slate-100 font-medium" : ""}`}
+              onClick={(e) => {
+                e.preventDefault();
+                onThreadClick?.(t.thread_id);
+                if (t.thread_id === threadId) return;
+                setThreadId(t.thread_id);
+              }}
+            >
+              <p className="truncate text-ellipsis">{itemText}</p>
+            </Button>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function ThreadHistoryLoading() {
+  return (
+    <div className="flex h-full w-full flex-col items-start justify-start gap-2 overflow-y-scroll [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-300 [&::-webkit-scrollbar-track]:bg-transparent">
+      {Array.from({ length: 30 }).map((_, i) => (
+        <Skeleton
+          key={`skeleton-${i}`}
+          className="h-10 w-[280px]"
+        />
+      ))}
+    </div>
+  );
+}
+
+export default function ThreadHistory() {
+  const isLargeScreen = useMediaQuery("(min-width: 1024px)");
+  const [, setThreadId] = useQueryState("threadId");
+  const [chatHistoryOpen, setChatHistoryOpen] = useQueryState(
+    "chatHistoryOpen",
+    parseAsBoolean.withDefault(false),
+  );
+
+  const { getThreads, threads, setThreads, threadsLoading, setThreadsLoading } =
+    useThreads();
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setThreadsLoading(true);
+    getThreads()
+      .then(setThreads)
+      .catch(console.error)
+      .finally(() => setThreadsLoading(false));
+  }, [getThreads, setThreads, setThreadsLoading]);
+
+  return (
+    <>
+      <div className="shadow-inner-right hidden h-dvh w-[300px] shrink-0 flex-col items-start justify-start gap-4 border-r border-slate-200 bg-slate-50/70 lg:flex">
+        <div className="flex w-full items-center justify-between px-3 pt-2">
+          <Button
+            className="hover:bg-gray-100"
+            variant="ghost"
+            onClick={() => setChatHistoryOpen((p) => !p)}
+          >
+            {chatHistoryOpen ? (
+              <PanelRightOpen className="size-5" />
+            ) : (
+              <PanelRightClose className="size-5" />
+            )}
+          </Button>
+          <h1 className="text-lg font-semibold tracking-tight">会话</h1>
+        </div>
+        <Button
+          className="mx-3 w-[calc(100%-1.5rem)] justify-start gap-2"
+          variant="outline"
+          onClick={() => {
+            setThreadId(null);
+          }}
+        >
+          <MessageSquarePlus className="size-4" /> 新建会话
+        </Button>
+        {threadsLoading ? (
+          <ThreadHistoryLoading />
+        ) : (
+          <ThreadList threads={threads} />
+        )}
+      </div>
+      <div className="lg:hidden">
+        <Sheet
+          open={!!chatHistoryOpen && !isLargeScreen}
+          onOpenChange={(open) => {
+            if (isLargeScreen) return;
+            setChatHistoryOpen(open);
+          }}
+        >
+          <SheetContent
+            side="left"
+            className="flex lg:hidden"
+          >
+            <SheetHeader>
+              <SheetTitle>会话</SheetTitle>
+            </SheetHeader>
+            <ThreadList
+              threads={threads}
+              onThreadClick={() => setChatHistoryOpen((o) => !o)}
+            />
+          </SheetContent>
+        </Sheet>
+      </div>
+    </>
+  );
+}

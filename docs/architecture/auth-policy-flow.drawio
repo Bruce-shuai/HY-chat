@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxGraphModel adaptiveColors="auto" dx="1680" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1680" pageHeight="800" math="0" shadow="0">
+  <root>
+    <mxCell id="0"/><mxCell id="1" parent="0"/>
+    <mxCell id="title" value="JWT 身份认证与 AI 权限执行流程" style="text;html=1;align=center;fontSize=24;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="520" y="20" width="620" height="50" as="geometry"/></mxCell>
+    <mxCell id="register" value="注册 / 登录" style="ellipse;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1"><mxGeometry x="40" y="140" width="140" height="70" as="geometry"/></mxCell>
+    <mxCell id="password" value="Argon2 密码哈希&lt;br&gt;首用户 = admin" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1"><mxGeometry x="230" y="140" width="170" height="70" as="geometry"/></mxCell>
+    <mxCell id="jwt" value="签发 JWT&lt;br&gt;Access + Refresh + token_version" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1"><mxGeometry x="450" y="135" width="190" height="80" as="geometry"/></mxCell>
+    <mxCell id="request" value="携带 Bearer Token&lt;br&gt;访问 FastAPI / LangGraph" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1"><mxGeometry x="690" y="140" width="190" height="70" as="geometry"/></mxCell>
+    <mxCell id="verify" value="校验签名 / exp / type&lt;br&gt;用户启用状态 / token_version" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1"><mxGeometry x="930" y="135" width="210" height="80" as="geometry"/></mxCell>
+    <mxCell id="valid" value="Token 有效？" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1"><mxGeometry x="1190" y="135" width="150" height="80" as="geometry"/></mxCell>
+    <mxCell id="deny401" value="401&lt;br&gt;重新登录或刷新" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1"><mxGeometry x="1410" y="60" width="150" height="70" as="geometry"/></mxCell>
+    <mxCell id="owner" value="绑定 user_id&lt;br&gt;Thread owner / 数据隔离" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1"><mxGeometry x="1410" y="170" width="170" height="75" as="geometry"/></mxCell>
+    <mxCell id="policy" value="加载 UserPolicy" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1"><mxGeometry x="1190" y="320" width="150" height="75" as="geometry"/></mxCell>
+    <mxCell id="model" value="模型白名单？" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1"><mxGeometry x="950" y="315" width="150" height="80" as="geometry"/></mxCell>
+    <mxCell id="rpm" value="Redis RPM&lt;br&gt;未超限？" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1"><mxGeometry x="710" y="315" width="150" height="80" as="geometry"/></mxCell>
+    <mxCell id="quota" value="Token 配额&lt;br&gt;仍可用？" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1"><mxGeometry x="470" y="315" width="150" height="80" as="geometry"/></mxCell>
+    <mxCell id="tool" value="工具权限？&lt;br&gt;图片 / 高成本" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1"><mxGeometry x="230" y="315" width="150" height="80" as="geometry"/></mxCell>
+    <mxCell id="allow" value="允许执行&lt;br&gt;Model / Tool" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="40" y="320" width="140" height="70" as="geometry"/></mxCell>
+    <mxCell id="deny403" value="403 / PolicyViolation&lt;br&gt;不调用外部模型或工具" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1"><mxGeometry x="680" y="500" width="200" height="75" as="geometry"/></mxCell>
+    <mxCell id="trace" value="记录 Trace 与 Token&lt;br&gt;更新月度用量" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1"><mxGeometry x="40" y="500" width="170" height="80" as="geometry"/></mxCell>
+    <mxCell id="logout" value="logout-all&lt;br&gt;token_version + 1&lt;br&gt;所有旧 Token 失效" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1"><mxGeometry x="1210" y="500" width="180" height="85" as="geometry"/></mxCell>
+    <mxCell id="e1" edge="1" parent="1" source="register" target="password" style="edgeStyle=orthogonalEdgeStyle;rounded=1;endArrow=classic;html=1;"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e2" edge="1" parent="1" source="password" target="jwt" style="edgeStyle=orthogonalEdgeStyle;rounded=1;endArrow=classic;html=1;"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e3" edge="1" parent="1" source="jwt" target="request" style="edgeStyle=orthogonalEdgeStyle;rounded=1;endArrow=classic;html=1;"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e4" edge="1" parent="1" source="request" target="verify" style="edgeStyle=orthogonalEdgeStyle;rounded=1;endArrow=classic;html=1;"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e5" edge="1" parent="1" source="verify" target="valid" style="edgeStyle=orthogonalEdgeStyle;rounded=1;endArrow=classic;html=1;"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e6" value="否" edge="1" parent="1" source="valid" target="deny401" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#b85450;endArrow=classic;html=1;"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e7" value="是" edge="1" parent="1" source="valid" target="owner" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#82b366;endArrow=classic;html=1;"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e8" edge="1" parent="1" source="owner" target="policy" style="edgeStyle=orthogonalEdgeStyle;rounded=1;endArrow=classic;html=1;"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e9" edge="1" parent="1" source="policy" target="model" style="edgeStyle=orthogonalEdgeStyle;rounded=1;endArrow=classic;html=1;"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e10" value="是" edge="1" parent="1" source="model" target="rpm" style="edgeStyle=orthogonalEdgeStyle;rounded=1;endArrow=classic;html=1;"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e11" value="是" edge="1" parent="1" source="rpm" target="quota" style="edgeStyle=orthogonalEdgeStyle;rounded=1;endArrow=classic;html=1;"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e12" value="是" edge="1" parent="1" source="quota" target="tool" style="edgeStyle=orthogonalEdgeStyle;rounded=1;endArrow=classic;html=1;"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e13" value="是 / 无工具" edge="1" parent="1" source="tool" target="allow" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#82b366;endArrow=classic;html=1;"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e14" edge="1" parent="1" source="allow" target="trace" style="edgeStyle=orthogonalEdgeStyle;rounded=1;endArrow=classic;html=1;"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e15" value="任一否" edge="1" parent="1" source="model" target="deny403" style="edgeStyle=orthogonalEdgeStyle;rounded=1;dashed=1;strokeColor=#b85450;endArrow=classic;html=1;"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e16" value="否" edge="1" parent="1" source="rpm" target="deny403" style="edgeStyle=orthogonalEdgeStyle;rounded=1;dashed=1;strokeColor=#b85450;endArrow=classic;html=1;"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e17" value="否" edge="1" parent="1" source="quota" target="deny403" style="edgeStyle=orthogonalEdgeStyle;rounded=1;dashed=1;strokeColor=#b85450;endArrow=classic;html=1;"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e18" value="否" edge="1" parent="1" source="tool" target="deny403" style="edgeStyle=orthogonalEdgeStyle;rounded=1;dashed=1;strokeColor=#b85450;endArrow=classic;html=1;"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e19" edge="1" parent="1" source="owner" target="logout" style="edgeStyle=orthogonalEdgeStyle;rounded=1;dashed=1;endArrow=classic;html=1;"><mxGeometry relative="1" as="geometry"/></mxCell>
+  </root>
+</mxGraphModel>
