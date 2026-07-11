@@ -6,8 +6,8 @@ and API join the external `nginx-proxy-manage_default` network.
 
 Create two Nginx Proxy Manager proxy hosts after the stack is healthy:
 
-- `hy-ai.xyz` and `www.hy-ai.xyz` -> `hy-chat-frontend:3000`
-- `api.hy-ai.xyz` -> `hy-chat-api:8000`
+- `chat.hy-ai.xyz` -> `hy-chat-frontend:3000`
+- `api.chat.hy-ai.xyz` -> `hy-chat-api:8000`
 
 Enable Websockets Support and request a Let's Encrypt certificate with Force
 SSL and HTTP/2 enabled for both proxy hosts.
@@ -20,15 +20,14 @@ following public DNS records are required before requesting certificates:
 
 | Record | Type | Value |
 | --- | --- | --- |
-| `@` | `A` | ECS public IPv4 address |
-| `www` | `A` | ECS public IPv4 address |
-| `api` | `A` | ECS public IPv4 address |
+| `chat` | `A` | ECS public IPv4 address |
+| `api.chat` | `A` | ECS public IPv4 address |
 
 Verify the deployment from the server without waiting for public DNS:
 
 ```bash
-curl -fsS -H 'Host: api.hy-ai.xyz' http://127.0.0.1/health
-curl -fsS -H 'Host: hy-ai.xyz' http://127.0.0.1/ >/dev/null
+curl -fsS -H 'Host: api.chat.hy-ai.xyz' http://127.0.0.1/health
+curl -fsS -H 'Host: chat.hy-ai.xyz' http://127.0.0.1/ >/dev/null
 ```
 
 The first account registered through the HY-chat UI becomes the administrator.

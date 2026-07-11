@@ -8,7 +8,7 @@ services:
       args:
         NEXT_PUBLIC_API_URL: /api
         NEXT_PUBLIC_ASSISTANT_ID: hy-chat
-        NEXT_PUBLIC_BACKEND_URL: https://api.hy-ai.xyz
+        NEXT_PUBLIC_BACKEND_URL: https://api.chat.hy-ai.xyz
     container_name: hy-chat-frontend
     environment:
       LANGGRAPH_API_URL: http://agent:2024
@@ -37,7 +37,7 @@ services:
       DATABASE_URL: postgresql+psycopg://hy_chat:${POSTGRES_PASSWORD}@postgres:5432/hy_chat_db
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
-      CORS_ORIGINS: https://hy-ai.xyz,https://www.hy-ai.xyz
+      CORS_ORIGINS: https://chat.hy-ai.xyz
       ZHIPU_API_KEY: ${ZHIPU_API_KEY:-}
       ZHIPU_BASE_URL: ${ZHIPU_BASE_URL:-https://open.bigmodel.cn/api/paas/v4}
       ZHIPU_CHAT_MODEL: ${ZHIPU_CHAT_MODEL:-glm-4-flash}
