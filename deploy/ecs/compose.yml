@@ -1,0 +1,149 @@
+name: hy-chat
+
+services:
+  frontend:
+    build:
+      context: ../..
+      dockerfile: Dockerfile.frontend
+      args:
+        NEXT_PUBLIC_API_URL: /api
+        NEXT_PUBLIC_ASSISTANT_ID: hy-chat
+        NEXT_PUBLIC_BACKEND_URL: https://api.hy-ai.xyz
+    container_name: hy-chat-frontend
+    environment:
+      LANGGRAPH_API_URL: http://agent:2024
+      LANGSMITH_API_KEY: ${LANGSMITH_API_KEY:-}
+    depends_on:
+      agent:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    networks:
+      - default
+      - proxy
+    restart: unless-stopped
+    mem_limit: 320m
+
+  api:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    container_name: hy-chat-api
+    environment: &backend-environment
+      SERVICE_ROLE: api
+      PORT: "8000"
+      APP_ENV: production
+      APP_NAME: HY-chat
+      DATABASE_URL: postgresql+psycopg://hy_chat:${POSTGRES_PASSWORD}@postgres:5432/hy_chat_db
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      CORS_ORIGINS: https://hy-ai.xyz,https://www.hy-ai.xyz
+      ZHIPU_API_KEY: ${ZHIPU_API_KEY:-}
+      ZHIPU_BASE_URL: ${ZHIPU_BASE_URL:-https://open.bigmodel.cn/api/paas/v4}
+      ZHIPU_CHAT_MODEL: ${ZHIPU_CHAT_MODEL:-glm-4-flash}
+      ZHIPU_CHAT_MODELS: ${ZHIPU_CHAT_MODELS:-glm-4-flash,glm-4-plus,glm-4.5}
+      ZHIPU_IMAGE_MODEL: ${ZHIPU_IMAGE_MODEL:-glm-image}
+      ZHIPU_EMBEDDING_MODEL: ${ZHIPU_EMBEDDING_MODEL:-embedding-3}
+      OPENAI_IMAGE_API_KEY: ${OPENAI_IMAGE_API_KEY:-}
+      TAVILY_API_KEY: ${TAVILY_API_KEY:-}
+      ALPHA_VANTAGE_API_KEY: ${ALPHA_VANTAGE_API_KEY:-}
+      LANGSMITH_TRACING: ${LANGSMITH_TRACING:-false}
+      LANGSMITH_API_KEY: ${LANGSMITH_API_KEY:-}
+      LANGSMITH_PROJECT: ${LANGSMITH_PROJECT:-hy-chat}
+      STORAGE_BACKEND: local
+      LOCAL_STORAGE_DIR: /data/storage
+      RAG_UPLOAD_DIR: /data/rag/uploads
+      WORKSPACE_ROOT: /workspace
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - storage_data:/data/storage
+      - rag_data:/data/rag
+      - workspace_data:/workspace
+    networks:
+      - default
+      - proxy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    restart: unless-stopped
+    mem_limit: 384m
+
+  agent:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    container_name: hy-chat-agent
+    environment:
+      <<: *backend-environment
+      SERVICE_ROLE: agent
+      PORT: "2024"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - storage_data:/data/storage
+      - rag_data:/data/rag
+      - workspace_data:/workspace
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:2024/ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+    restart: unless-stopped
+    mem_limit: 448m
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: hy-chat-postgres
+    environment:
+      POSTGRES_USER: hy_chat
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: hy_chat_db
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hy_chat -d hy_chat_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+    mem_limit: 384m
+
+  redis:
+    image: redis:7-alpine
+    container_name: hy-chat-redis
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD}"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a '$${REDIS_PASSWORD}' ping | grep PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    restart: unless-stopped
+    mem_limit: 128m
+
+volumes:
+  postgres_data:
+  redis_data:
+  storage_data:
+  rag_data:
+  workspace_data:
+
+networks:
+  proxy:
+    external: true
+    name: nginx-proxy-manage_default
