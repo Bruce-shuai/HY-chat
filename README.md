@@ -253,9 +253,10 @@ cd frontend && corepack pnpm@10.5.1 build
 
 ## 架构图
 
-- [系统总体架构](docs/architecture/hy-chat-system-architecture.drawio)
+- [前端架构](docs/architecture/hy-chat-frontend-architecture.png)
+- [后端架构](docs/architecture/hy-chat-backend-architecture.png)
 - [聊天、RAG 与 Tool Calling 流程](docs/architecture/chat-rag-tool-flow.drawio)
 - [文生图与图生图流程](docs/architecture/image-generation-flow.drawio)
 - [JWT、权限与配额校验流程](docs/architecture/auth-policy-flow.drawio)
 
-图文件使用原生 draw.io `mxGraphModel` 格式，可继续编辑和导出 PNG、SVG 或 PDF。
+前后端架构图使用 PNG 格式；专项流程图使用原生 draw.io `mxGraphModel` 格式，可继续编辑和导出 PNG、SVG 或 PDF。
