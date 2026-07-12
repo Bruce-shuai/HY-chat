@@ -12,6 +12,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
+from app.core.types import UserRole
 from app.db.models import User, UserPolicy
 
 settings = get_settings()
@@ -26,7 +27,7 @@ class TokenPayload(TypedDict):
     sub: str
     type: str
     ver: int
-    role: str
+    role: UserRole
     iat: int
     exp: int
     jti: str
@@ -57,7 +58,7 @@ def create_user(db: Session, email: str, password: str, display_name: str) -> Us
         email=normalized_email,
         display_name=display_name.strip(),
         password_hash=hash_password(password),
-        role="admin" if is_first_user else "user",
+        role=UserRole.ADMIN if is_first_user else UserRole.USER,
     )
     user.policy = UserPolicy(
         allowed_models=settings.available_chat_models,

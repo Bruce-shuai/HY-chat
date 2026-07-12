@@ -14,7 +14,7 @@ from langgraph.graph import StateGraph, START, END
 from langsmith import traceable
 from sqlalchemy.orm import Session
 
-from app.core.types import ChatMessagePayload, JsonObject
+from app.core.types import ChatMessagePayload, ChatRole, JsonObject
 from app.db.models import ToolCall
 from app.models.router import ModelRouter
 from app.tools.file_tools import list_files, read_file, search_code
@@ -114,7 +114,7 @@ def build_agent_graph(db: Session):
         router = ModelRouter(db=db, run_id=state["run_id"])
         messages: list[ChatMessagePayload] = [
             {
-                "role": "system",
+                "role": ChatRole.SYSTEM,
                 "content": (
                     "你是 HY-chat，一个具备代码分析和图片生成能力的 AI 聊天助手。"
                     "你需要先基于真实文件和搜索结果生成执行计划。"
@@ -122,7 +122,7 @@ def build_agent_graph(db: Session):
                 ),
             },
             {
-                "role": "user",
+                "role": ChatRole.USER,
                 "content": (
                     f"用户任务：{state['task']}\n\n"
                     f"项目文件列表：{state.get('project_files')}\n\n"
@@ -139,11 +139,11 @@ def build_agent_graph(db: Session):
         router = ModelRouter(db=db, run_id=state["run_id"])
         messages: list[ChatMessagePayload] = [
             {
-                "role": "system",
+                "role": ChatRole.SYSTEM,
                 "content": "你是一个严谨的 AI 应用工程师，负责给用户总结本次 Coding Agent 执行结果。",
             },
             {
-                "role": "user",
+                "role": ChatRole.USER,
                 "content": (
                     f"用户任务：{state['task']}\n\n"
                     f"执行计划：{state.get('plan')}\n\n"

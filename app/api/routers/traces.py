@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_user
+from app.core.types import UserRole
 from app.db.models import TraceSpan, User
 from app.db.session import get_db
 from app.tracing.service import serialize_span
@@ -24,7 +25,7 @@ def list_traces(
     db: Session = Depends(get_db),
 ):
     statement = select(TraceSpan)
-    if not (all_users and user.role == "admin"):
+    if not (all_users and user.role == UserRole.ADMIN):
         statement = statement.where(TraceSpan.user_id == user.id)
     if conversation_id:
         statement = statement.where(TraceSpan.conversation_id == conversation_id)
@@ -45,6 +46,6 @@ def get_trace(
     db: Session = Depends(get_db),
 ):
     row = db.get(TraceSpan, trace_id)
-    if not row or (row.user_id != user.id and user.role != "admin"):
+    if not row or (row.user_id != user.id and user.role != UserRole.ADMIN):
         raise HTTPException(status_code=404, detail="Trace 不存在")
     return serialize_span(row, include_payload=True)

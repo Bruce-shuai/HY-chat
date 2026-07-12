@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.agents.graph import run_agent_graph
 from app.auth.dependencies import get_current_user
+from app.core.types import UserRole
 from app.core.config import get_settings
 from app.db.models import AgentRun, ModelCall, ToolCall, User
 from app.db.session import get_db
@@ -89,7 +90,7 @@ def list_coding_agent_runs(
     db: Session = Depends(get_db),
 ) -> list[AgentRunSummary]:
     statement = select(AgentRun)
-    if user.role != "admin":
+    if user.role != UserRole.ADMIN:
         statement = statement.where(AgentRun.user_id == user.id)
     rows = db.scalars(
         statement.order_by(AgentRun.created_at.desc()).limit(
@@ -117,7 +118,7 @@ def get_coding_agent_run(
     db: Session = Depends(get_db),
 ) -> AgentRunDetail:
     run = db.get(AgentRun, run_id)
-    if not run or (run.user_id != user.id and user.role != "admin"):
+    if not run or (run.user_id != user.id and user.role != UserRole.ADMIN):
         raise HTTPException(status_code=404, detail="Coding Agent 运行记录不存在")
     tools = db.scalars(
         select(ToolCall).where(ToolCall.run_id == run_id).order_by(ToolCall.id.asc())

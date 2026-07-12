@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from typing import Literal
-
 from pydantic import BaseModel, Field, model_validator
+
+from app.core.types import ChatMessagePayload, ChatRole
 
 
 class ChatMessage(BaseModel):
-    role: Literal["system", "user", "assistant"]
+    role: ChatRole
     content: str
 
 
@@ -26,10 +26,15 @@ class ChatStreamRequest(BaseModel):
             raise ValueError("message or messages is required")
         return self
 
-    def normalized_messages(self) -> list[dict[str, str]]:
-        messages = [message.model_dump() for message in self.messages]
+    def normalized_messages(self) -> list[ChatMessagePayload]:
+        messages = [
+            ChatMessagePayload(role=message.role, content=message.content)
+            for message in self.messages
+        ]
         if self.message:
-            messages.append({"role": "user", "content": self.message})
+            messages.append(
+                ChatMessagePayload(role=ChatRole.USER, content=self.message)
+            )
         return messages
 
 

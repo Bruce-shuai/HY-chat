@@ -4,6 +4,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, EmailStr, Field
 
+from app.core.types import UserRole
+
 
 class RegisterRequest(BaseModel):
     email: EmailStr
@@ -34,7 +36,7 @@ class UserResponse(BaseModel):
     id: str
     email: EmailStr
     display_name: str
-    role: str
+    role: UserRole
     is_active: bool
     created_at: datetime
     policy: UserPolicyResponse
@@ -50,7 +52,7 @@ class TokenPair(BaseModel):
 
 class AdminUserUpdate(BaseModel):
     display_name: str | None = Field(default=None, min_length=1, max_length=120)
-    role: str | None = Field(default=None, pattern="^(admin|user)$")
+    role: UserRole | None = None
     is_active: bool | None = None
 
 

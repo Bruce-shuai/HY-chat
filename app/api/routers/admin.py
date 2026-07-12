@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.auth.dependencies import require_admin
 from app.auth.serializers import serialize_user
 from app.core.config import get_settings
+from app.core.types import UserRole
 from app.db.models import Conversation, StoredFile, TraceSpan, User
 from app.db.session import get_db
 from app.schemas.auth import AdminPolicyUpdate, AdminUserUpdate
@@ -45,14 +46,14 @@ def update_user(user_id: str, request: AdminUserUpdate, db: Session = Depends(ge
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")
     values = request.model_dump(exclude_unset=True)
-    if user.role == "admin" and (
-        values.get("role") == "user" or values.get("is_active") is False
+    if user.role == UserRole.ADMIN and (
+        values.get("role") == UserRole.USER or values.get("is_active") is False
     ):
         admin_count = (
             db.scalar(
                 select(func.count())
                 .select_from(User)
-                .where(User.role == "admin", User.is_active.is_(True))
+                .where(User.role == UserRole.ADMIN, User.is_active.is_(True))
             )
             or 0
         )

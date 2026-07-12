@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_user
+from app.core.types import UserRole
 from app.core.config import get_settings
 from app.core.constants import SUPPORTED_IMAGE_CONTENT_TYPES, SUPPORTED_IMAGE_EXTENSIONS
 from app.db.models import ImageGeneration, User
@@ -220,6 +221,6 @@ def get_image_generation(
     db: Session = Depends(get_db),
 ):
     row = db.get(ImageGeneration, generation_id)
-    if not row or (row.user_id != user.id and user.role != "admin"):
+    if not row or (row.user_id != user.id and user.role != UserRole.ADMIN):
         raise HTTPException(status_code=404, detail="图片生成记录不存在")
     return _summary(row)

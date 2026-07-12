@@ -4,6 +4,7 @@ from sqlalchemy import (
     BigInteger,
     Boolean,
     DateTime,
+    Enum as SqlEnum,
     ForeignKey,
     Integer,
     JSON,
@@ -15,7 +16,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from pgvector.sqlalchemy import Vector
 
 from app.core.config import get_settings
-from app.core.types import JsonObject
+from app.core.types import JsonObject, UserRole
 
 from app.db.session import Base
 
@@ -33,7 +34,15 @@ class User(Base):
     )
     display_name: Mapped[str] = mapped_column(String(120), nullable=False)
     password_hash: Mapped[str] = mapped_column(Text, nullable=False)
-    role: Mapped[str] = mapped_column(String(32), default="user", index=True)
+    role: Mapped[UserRole] = mapped_column(
+        SqlEnum(
+            UserRole,
+            native_enum=False,
+            values_callable=lambda roles: [role.value for role in roles],
+        ),
+        default=UserRole.USER,
+        index=True,
+    )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
     token_version: Mapped[int] = mapped_column(Integer, default=0)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
