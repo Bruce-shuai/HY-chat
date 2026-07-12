@@ -4,6 +4,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
+from app.auth.errors import bearer_unauthorized_details
 from app.auth.service import AuthenticationError, user_from_token
 from app.core.types import UserRole
 from app.db.models import User
@@ -13,11 +14,7 @@ bearer_scheme = HTTPBearer(auto_error=False)
 
 
 def bearer_unauthorized(detail: str = "请先登录") -> HTTPException:
-    return HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail=detail,
-        headers={"WWW-Authenticate": "Bearer"},
-    )
+    return HTTPException(**bearer_unauthorized_details(detail))
 
 
 def get_current_user(

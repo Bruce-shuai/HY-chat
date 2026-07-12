@@ -11,18 +11,7 @@ from collections.abc import AsyncIterator
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routers import (
-    admin_router,
-    auth_router,
-    chat_router,
-    coding_agent_router,
-    conversations_router,
-    files_router,
-    images_router,
-    rag_router,
-    system_router,
-    traces_router,
-)
+from app.api.router import api_router
 from app.cache.service import cache
 from app.core.config import get_settings
 from app.db.init_db import init_db
@@ -68,19 +57,7 @@ def _add_routes(application: FastAPI) -> None:
     application.add_api_route(
         "/health", health_check, methods=["GET"], tags=["system"]
     )
-    for router in (
-        auth_router,
-        chat_router,
-        coding_agent_router,
-        conversations_router,
-        files_router,
-        images_router,
-        rag_router,
-        system_router,
-        traces_router,
-        admin_router,
-    ):
-        application.include_router(router)
+    application.include_router(api_router)
 
 
 def create_app() -> FastAPI:

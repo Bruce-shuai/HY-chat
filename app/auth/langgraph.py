@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from langgraph_sdk import Auth
 
+from app.auth.errors import bearer_unauthorized_details
 from app.auth.service import AuthenticationError, user_from_token
 from app.db.init_db import init_db
 from app.db.session import SessionLocal
@@ -10,14 +11,16 @@ init_db()
 auth = Auth()
 
 
+def langgraph_bearer_unauthorized(
+    detail: str = "请先登录",
+) -> Auth.exceptions.HTTPException:
+    return Auth.exceptions.HTTPException(**bearer_unauthorized_details(detail))
+
+
 @auth.authenticate
 async def authenticate(authorization: str | None) -> Auth.types.MinimalUserDict:
     if not authorization or not authorization.lower().startswith("bearer "):
-        raise Auth.exceptions.HTTPException(
-            status_code=401,
-            detail="请先登录",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        raise langgraph_bearer_unauthorized()
     token = authorization.split(" ", 1)[1].strip()
     db = SessionLocal()
     try:
@@ -29,11 +32,7 @@ async def authenticate(authorization: str | None) -> Auth.types.MinimalUserDict:
             "is_authenticated": True,
         }
     except AuthenticationError as exc:
-        raise Auth.exceptions.HTTPException(
-            status_code=401,
-            detail=str(exc),
-            headers={"WWW-Authenticate": "Bearer"},
-        ) from exc
+        raise langgraph_bearer_unauthorized(str(exc)) from exc
     finally:
         db.close()
 
