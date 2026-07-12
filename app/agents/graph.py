@@ -1,3 +1,11 @@
+"""A small, separate Coding Agent workflow.
+
+Unlike ``app.agents.chat``, this graph does not power the interactive chat UI.
+It scans a mounted workspace, searches and reads a bounded set of files, then
+asks the model for a plan and summary. Tool activity is persisted for the
+``/coding-agent`` run-history endpoints.
+"""
+
 from __future__ import annotations
 
 from typing import TypedDict
@@ -56,6 +64,8 @@ def _extract_search_terms(task: str) -> list[str]:
 
 
 def build_agent_graph(db: Session):
+    """Build the scan -> search -> read -> plan -> summarize workflow."""
+
     def scan_project_node(state: AgentState) -> AgentState:
         output = list_files(state["workspace"])
         _save_tool_call(
@@ -165,6 +175,8 @@ def build_agent_graph(db: Session):
 def run_agent_graph(
     db: Session, run_id: str, task: str, workspace: str, model: str | None = None
 ) -> str:
+    """Run one Coding Agent job and return its user-facing summary."""
+
     graph = build_agent_graph(db)
     result = graph.invoke(
         {

@@ -1,3 +1,14 @@
+"""Primary conversational LangGraph and its policy/tracing middleware.
+
+Request flow:
+
+1. LangGraph receives messages plus ``ChatState``.
+2. ``PolicyTraceMiddleware`` authorizes each model/tool call and records traces.
+3. The selected model may call tools from ``app.tools.registry``.
+4. Without a model API key, a deterministic mock graph keeps the full transport
+   and authorization path usable in local development and tests.
+"""
+
 from __future__ import annotations
 
 import time
@@ -134,6 +145,12 @@ def _ensure_conversation(
 
 
 class PolicyTraceMiddleware(AgentMiddleware):
+    """Enforce server-side policy and persist observability around agent calls.
+
+    Both synchronous and asynchronous hooks delegate to the same preparation
+    and completion helpers so their behavior stays equivalent.
+    """
+
     state_schema = ChatState
 
     def _prepare_model_call(
@@ -380,6 +397,8 @@ def _build_mock_graph():
 
 
 def build_chat_graph():
+    """Create the production agent or the keyless development substitute."""
+
     if not settings.zhipu_api_key:
         return _build_mock_graph()
 

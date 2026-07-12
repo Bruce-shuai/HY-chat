@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from app.db.models import User
+from app.db.models import User, UserPolicy
 
 
-def serialize_policy(policy) -> dict[str, object]:
+def serialize_policy(policy: UserPolicy) -> dict[str, object]:
     return {
         "allowed_models": list(policy.allowed_models or []),
         "rpm_limit": policy.rpm_limit,

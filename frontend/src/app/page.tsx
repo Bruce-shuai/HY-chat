@@ -8,7 +8,8 @@ import { Toaster } from "@/components/ui/sonner";
 import React from "react";
 import { AuthBoundary } from "@/components/auth/AuthBoundary";
 
-export default function DemoPage(): React.ReactNode {
+/** Compose the providers required by the main authenticated chat workspace. */
+export default function ChatPage(): React.ReactNode {
   return (
     <React.Suspense fallback={<div>Loading (layout)...</div>}>
       <AuthBoundary>

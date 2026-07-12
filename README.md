@@ -4,6 +4,8 @@ HY-chat 是一个面向多用户的 AI 聊天工作台，基于 LangChain Agent 
 
 ![HY-chat Agent Chat UI](docs/hy-chat-ui.png)
 
+第一次阅读或准备修改项目时，建议先看[代码阅读指南](docs/code-reading-guide.md)，其中说明了目录职责、两条 Agent 链路的区别，以及常见需求应该从哪个文件开始。
+
 ## 能力概览
 
 - 响应式聊天界面，支持桌面、平板和手机
