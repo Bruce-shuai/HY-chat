@@ -15,7 +15,7 @@ import {
   DO_NOT_RENDER_ID_PREFIX,
   ensureToolCallsHaveResponses,
 } from "@/lib/ensure-tool-responses";
-import { LangGraphLogoSVG } from "../icons/langgraph";
+import { BrandLogo } from "../brand-logo";
 import { TooltipIconButton } from "./tooltip-icon-button";
 import {
   ArrowDown,
@@ -386,10 +386,7 @@ export function Thread() {
                     damping: 30,
                   }}
                 >
-                  <LangGraphLogoSVG
-                    width={32}
-                    height={32}
-                  />
+                  <BrandLogo className="size-9 border" />
                   <span className="text-xl font-semibold tracking-tight">
                     HY-chat
                   </span>
@@ -459,11 +456,12 @@ export function Thread() {
               footer={
                 <div className="bg-background sticky bottom-0 flex flex-col items-center gap-6 px-2 sm:px-4">
                   {!chatStarted && (
-                    <div className="flex items-center gap-3">
-                      <LangGraphLogoSVG className="h-8 flex-shrink-0" />
-                      <h1 className="text-2xl font-semibold tracking-tight">
-                        HY-chat
-                      </h1>
+                    <div className="flex items-center justify-center">
+                      <BrandLogo
+                        variant="wordmark"
+                        className="h-28 w-32 border shadow-sm"
+                        priority
+                      />
                     </div>
                   )}
 

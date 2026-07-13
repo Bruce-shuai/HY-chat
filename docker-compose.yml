@@ -20,7 +20,7 @@ services:
   agent:
     build: .
     container_name: hy-chat-agent
-    command: ["langgraph", "dev", "--host", "0.0.0.0", "--port", "2024", "--no-browser", "--no-reload"]
+    command: ["langgraph", "dev", "--host", "0.0.0.0", "--port", "2024", "--no-browser", "--no-reload", "--allow-blocking"]
     env_file:
       - .env
     expose:

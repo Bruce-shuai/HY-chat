@@ -15,6 +15,10 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "HY-chat",
   description: "HY-chat AI assistant powered by LangChain and LangGraph",
+  icons: {
+    icon: "/hy-chat-logo.png",
+    apple: "/hy-chat-logo.png",
+  },
 };
 
 export default function RootLayout({

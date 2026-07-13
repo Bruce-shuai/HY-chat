@@ -1,11 +1,12 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { LoaderCircle, MessageSquareText, UserRound } from "lucide-react";
+import { LoaderCircle, UserRound } from "lucide-react";
 import { useAuth } from "@/providers/Auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
+import { BrandLogo } from "@/components/brand-logo";
 
 export function LoginScreen() {
   const { login, register, accounts, switchAccount } = useAuth();
@@ -39,8 +40,12 @@ export function LoginScreen() {
     <main className="flex min-h-dvh items-center justify-center bg-muted/30 p-4 sm:p-8">
       <div className="grid w-full max-w-4xl overflow-hidden rounded-3xl border bg-background shadow-xl md:grid-cols-[1.05fr_1fr]">
         <section className="hidden bg-slate-950 p-10 text-white md:flex md:flex-col md:justify-between">
-          <div className="flex items-center gap-3 text-xl font-semibold">
-            <MessageSquareText className="size-7" /> HY-chat
+          <div className="flex items-center">
+            <BrandLogo
+              variant="wordmark"
+              className="h-20 w-24 shadow-lg"
+              priority
+            />
           </div>
           <div>
             <h1 className="text-4xl leading-tight font-semibold">
@@ -53,8 +58,12 @@ export function LoginScreen() {
         </section>
         <section className="p-6 sm:p-10">
           <div className="mb-8 md:hidden">
-            <div className="flex items-center gap-2 text-xl font-semibold">
-              <MessageSquareText /> HY-chat
+            <div className="flex items-center">
+              <BrandLogo
+                variant="wordmark"
+                className="h-20 w-24 border shadow-sm"
+                priority
+              />
             </div>
           </div>
           <div className="mb-6 flex rounded-xl bg-muted p-1">

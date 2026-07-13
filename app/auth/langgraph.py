@@ -41,12 +41,15 @@ async def authenticate(authorization: str | None) -> Auth.types.MinimalUserDict:
 @auth.on.threads.create
 async def create_thread(ctx: Auth.types.AuthContext, value: dict[str, object]):
     value.setdefault("metadata", {})["owner"] = ctx.user.identity
+    return {"owner": ctx.user.identity}
 
 
 @auth.on.threads
 async def scope_threads(
     ctx: Auth.types.AuthContext, value: object
 ) -> Auth.types.FilterType:
+    if isinstance(value, dict):
+        value.setdefault("metadata", {})["owner"] = ctx.user.identity
     return {"owner": ctx.user.identity}
 
 

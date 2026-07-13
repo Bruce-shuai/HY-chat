@@ -4,6 +4,7 @@ import React, {
   ReactNode,
   useState,
   useEffect,
+  useMemo,
 } from "react";
 import { useStream } from "@langchain/react";
 import { type BaseMessage } from "@langchain/core/messages";
@@ -11,7 +12,7 @@ import { type UIMessage } from "@langchain/langgraph-sdk/react-ui";
 import { useQueryState } from "nuqs";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { LangGraphLogoSVG } from "@/components/icons/langgraph";
+import { BrandLogo } from "@/components/brand-logo";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { ArrowRight } from "lucide-react";
@@ -20,6 +21,7 @@ import { getApiKey } from "@/lib/api-key";
 import { useThreads } from "./Thread";
 import { toast } from "sonner";
 import { useAuth } from "./Auth";
+import { resolveApiUrl } from "./client";
 
 export type StateType = {
   messages: BaseMessage[];
@@ -77,14 +79,19 @@ const StreamSession = ({
 }) => {
   const [threadId, setThreadId] = useQueryState("threadId");
   const { getThreads, setThreads } = useThreads();
-  const streamValue = useTypedStream({
-    apiUrl,
-    apiKey: apiKey ?? undefined,
-    assistantId,
-    defaultHeaders: {
+  const resolvedApiUrl = resolveApiUrl(apiUrl);
+  const defaultHeaders = useMemo(
+    () => ({
       ...(authScheme ? { "X-Auth-Scheme": authScheme } : {}),
       ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-    },
+    }),
+    [authScheme, accessToken],
+  );
+  const streamValue = useTypedStream({
+    apiUrl: resolvedApiUrl,
+    apiKey: apiKey ?? undefined,
+    assistantId,
+    defaultHeaders,
     threadId: threadId ?? null,
     onThreadId: (id) => {
       setThreadId(id);
@@ -95,12 +102,12 @@ const StreamSession = ({
   });
 
   useEffect(() => {
-    checkGraphStatus(apiUrl, apiKey, authScheme, accessToken).then((ok) => {
+    checkGraphStatus(resolvedApiUrl, apiKey, authScheme, accessToken).then((ok) => {
       if (!ok) {
         toast.error("Failed to connect to LangGraph server", {
           description: () => (
             <p>
-              Please ensure your graph is running at <code>{apiUrl}</code> and
+              Please ensure your graph is running at <code>{resolvedApiUrl}</code> and
               your API key is correctly set (if connecting to a deployed graph).
             </p>
           ),
@@ -110,7 +117,7 @@ const StreamSession = ({
         });
       }
     });
-  }, [apiKey, apiUrl, authScheme, accessToken]);
+  }, [apiKey, resolvedApiUrl, authScheme, accessToken]);
 
   return (
     <StreamContext.Provider value={streamValue}>
@@ -173,7 +180,7 @@ export const StreamProvider: React.FC<{ children: ReactNode }> = ({
         <div className="animate-in fade-in-0 zoom-in-95 bg-background flex max-w-3xl flex-col rounded-lg border shadow-lg">
           <div className="mt-14 flex flex-col gap-2 border-b p-6">
             <div className="flex flex-col items-start gap-2">
-              <LangGraphLogoSVG className="h-7" />
+              <BrandLogo className="size-9 border" priority />
               <h1 className="text-xl font-semibold tracking-tight">HY-chat</h1>
             </div>
             <p className="text-muted-foreground">
