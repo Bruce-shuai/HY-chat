@@ -2,7 +2,14 @@
 
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useState } from "react";
-import { ArrowLeft, Files, MessageSquare, Shield, Users } from "lucide-react";
+import {
+  ArrowLeft,
+  Files,
+  MessageSquare,
+  Shield,
+  Trash2,
+  Users,
+} from "lucide-react";
 import { AuthBoundary } from "@/components/auth/AuthBoundary";
 import { AccountMenu } from "@/components/auth/AccountMenu";
 import { Button } from "@/components/ui/button";
@@ -22,6 +29,7 @@ function AdminContent() {
   const [users, setUsers] = useState<AuthUser[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [message, setMessage] = useState("");
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const backend =
     process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
 
@@ -88,6 +96,32 @@ function AdminContent() {
     } else {
       setMessage("已保存");
       load();
+    }
+  };
+
+  const remove = async (target: AuthUser) => {
+    if (
+      !window.confirm(
+        `确定删除成员“${target.display_name}”吗？该成员的会话、文件和权限数据也会被删除。`,
+      )
+    ) {
+      return;
+    }
+    setDeletingUserId(target.id);
+    setMessage("");
+    try {
+      const response = await authFetch(`${backend}/admin/users/${target.id}`, {
+        method: "DELETE",
+      });
+      if (!response.ok) {
+        const error = await response.json().catch(() => null);
+        setMessage(error?.detail || "删除失败");
+        return;
+      }
+      setMessage(`已删除成员“${target.display_name}”`);
+      await load();
+    } finally {
+      setDeletingUserId(null);
     }
   };
 
@@ -213,12 +247,25 @@ function AdminContent() {
                   />
                   高成本工具
                 </label>
-                <Button
-                  size="sm"
-                  className="ml-auto"
-                >
-                  保存
-                </Button>
+                <div className="ml-auto flex items-center gap-2">
+                  {item.id === user.id ? (
+                    <span className="text-xs text-muted-foreground">
+                      当前账号
+                    </span>
+                  ) : (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="destructive"
+                      disabled={deletingUserId === item.id}
+                      onClick={() => remove(item)}
+                    >
+                      <Trash2 className="size-4" />
+                      {deletingUserId === item.id ? "删除中…" : "删除成员"}
+                    </Button>
+                  )}
+                  <Button size="sm">保存</Button>
+                </div>
               </div>
             </form>
           ))}

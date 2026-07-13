@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+import logging
+
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
@@ -11,11 +13,13 @@ from app.core.types import UserRole
 from app.db.models import Conversation, StoredFile, TraceSpan, User
 from app.db.session import get_db
 from app.schemas.auth import AdminPolicyUpdate, AdminUserUpdate
+from app.storage.service import storage
 
 router = APIRouter(
     prefix="/admin", tags=["admin"], dependencies=[Depends(require_admin)]
 )
 settings = get_settings()
+logger = logging.getLogger(__name__)
 
 
 @router.get("/stats")
@@ -38,6 +42,47 @@ def list_users(db: Session = Depends(get_db)):
         select(User).options(selectinload(User.policy)).order_by(User.created_at.desc())
     ).all()
     return {"users": [serialize_user(user) for user in users]}
+
+
+@router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_user(
+    user_id: str,
+    current_admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    user = db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    if user.id == current_admin.id:
+        raise HTTPException(status_code=409, detail="不能删除当前登录账号")
+    if user.role == UserRole.ADMIN:
+        admin_count = (
+            db.scalar(
+                select(func.count())
+                .select_from(User)
+                .where(User.role == UserRole.ADMIN, User.is_active.is_(True))
+            )
+            or 0
+        )
+        if user.is_active and admin_count <= 1:
+            raise HTTPException(status_code=409, detail="不能删除最后一个管理员")
+
+    object_keys = list(
+        db.scalars(select(StoredFile.object_key).where(StoredFile.user_id == user.id))
+    )
+    db.delete(user)
+    db.commit()
+
+    for object_key in object_keys:
+        try:
+            storage.delete(object_key)
+        except Exception:
+            logger.warning(
+                "Failed to delete stored object for removed user",
+                exc_info=True,
+                extra={"user_id": user_id, "object_key": object_key},
+            )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.patch("/users/{user_id}")

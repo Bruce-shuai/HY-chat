@@ -139,6 +139,30 @@ async def test_auth_roles_policy_and_token_revocation(tmp_path, monkeypatch):
                 headers={"Authorization": f"Bearer {user_token}"},
             )
             assert me.status_code == 401
+
+            delete_self = await client.delete(
+                f"/admin/users/{first.json()['user']['id']}",
+                headers={"Authorization": f"Bearer {admin_token}"},
+            )
+            assert delete_self.status_code == 409
+
+            deleted = await client.delete(
+                f"/admin/users/{user_id}",
+                headers={"Authorization": f"Bearer {admin_token}"},
+            )
+            assert deleted.status_code == 204
+
+            deleted_user = await client.get(
+                "/auth/me",
+                headers={"Authorization": f"Bearer {second.json()['access_token']}"},
+            )
+            assert deleted_user.status_code == 401
+
+            remaining_users = await client.get(
+                "/admin/users",
+                headers={"Authorization": f"Bearer {admin_token}"},
+            )
+            assert len(remaining_users.json()["users"]) == 1
     finally:
         app.dependency_overrides.clear()
         Base.metadata.drop_all(engine)
