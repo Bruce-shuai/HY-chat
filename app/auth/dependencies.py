@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.auth.errors import bearer_unauthorized_details
 from app.auth.service import AuthenticationError, user_from_token
+from app.auth.types import TokenType
 from app.core.types import UserRole
 from app.db.models import User
 from app.db.session import get_db
@@ -24,7 +25,9 @@ def get_current_user(
     if not credentials or credentials.scheme.lower() != "bearer":
         raise bearer_unauthorized()
     try:
-        return user_from_token(db, credentials.credentials, expected_type="access")
+        return user_from_token(
+            db, credentials.credentials, expected_type=TokenType.ACCESS
+        )
     except AuthenticationError as exc:
         raise bearer_unauthorized(str(exc)) from exc
 

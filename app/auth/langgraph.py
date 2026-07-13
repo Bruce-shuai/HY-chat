@@ -4,6 +4,7 @@ from langgraph_sdk import Auth
 
 from app.auth.errors import bearer_unauthorized_details
 from app.auth.service import AuthenticationError, user_from_token
+from app.auth.types import TokenType
 from app.db.init_db import init_db
 from app.db.session import SessionLocal
 
@@ -24,7 +25,7 @@ async def authenticate(authorization: str | None) -> Auth.types.MinimalUserDict:
     token = authorization.split(" ", 1)[1].strip()
     db = SessionLocal()
     try:
-        user = user_from_token(db, token, expected_type="access")
+        user = user_from_token(db, token, expected_type=TokenType.ACCESS)
         return {
             "identity": user.id,
             "display_name": user.display_name,

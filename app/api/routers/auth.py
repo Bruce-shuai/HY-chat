@@ -12,6 +12,7 @@ from app.auth.service import (
     token_pair,
     user_from_token,
 )
+from app.auth.types import TokenType
 from app.db.models import User
 from app.db.session import get_db
 from app.schemas.auth import (
@@ -50,7 +51,9 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
 @router.post("/refresh", response_model=TokenPair)
 def refresh(request: RefreshRequest, db: Session = Depends(get_db)):
     try:
-        user = user_from_token(db, request.refresh_token, expected_type="refresh")
+        user = user_from_token(
+            db, request.refresh_token, expected_type=TokenType.REFRESH
+        )
     except AuthenticationError as exc:
         raise HTTPException(status_code=401, detail=str(exc)) from exc
     return _token_response(user)

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timedelta
-from typing import Literal, TypedDict, cast
+from typing import TypedDict, cast
 
 import jwt
 from jwt.exceptions import InvalidTokenError
@@ -11,6 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.auth.types import TokenType
 from app.core.config import get_settings
 from app.core.types import UserRole
 from app.db.models import User, UserPolicy
@@ -91,16 +92,16 @@ def authenticate_user(db: Session, email: str, password: str) -> User:
     return user
 
 
-def create_token(user: User, token_type: Literal["access", "refresh"]) -> str:
+def create_token(user: User, token_type: TokenType) -> str:
     now = datetime.utcnow()
     expires = now + (
         timedelta(minutes=settings.jwt_access_token_minutes)
-        if token_type == "access"
+        if token_type is TokenType.ACCESS
         else timedelta(days=settings.jwt_refresh_token_days)
     )
     payload = {
         "sub": user.id,
-        "type": token_type,
+        "type": token_type.value,
         "ver": user.token_version,
         "role": user.role,
         "iat": now,
@@ -112,7 +113,9 @@ def create_token(user: User, token_type: Literal["access", "refresh"]) -> str:
     )
 
 
-def decode_token(token: str, expected_type: str | None = None) -> TokenPayload:
+def decode_token(
+    token: str, expected_type: TokenType | None = None
+) -> TokenPayload:
     try:
         payload = cast(
             TokenPayload,
@@ -125,12 +128,16 @@ def decode_token(token: str, expected_type: str | None = None) -> TokenPayload:
         )
     except InvalidTokenError as exc:
         raise AuthenticationError("登录凭证无效或已过期") from exc
-    if expected_type and payload.get("type") != expected_type:
+    if expected_type and payload.get("type") != expected_type.value:
         raise AuthenticationError("登录凭证类型不正确")
     return payload
 
 
-def user_from_token(db: Session, token: str, expected_type: str = "access") -> User:
+def user_from_token(
+    db: Session,
+    token: str,
+    expected_type: TokenType = TokenType.ACCESS,
+) -> User:
     payload = decode_token(token, expected_type)
     user = db.get(User, payload["sub"])
     if not user or not user.is_active:
@@ -142,8 +149,8 @@ def user_from_token(db: Session, token: str, expected_type: str = "access") -> U
 
 def token_pair(user: User) -> dict[str, str | int]:
     return {
-        "access_token": create_token(user, "access"),
-        "refresh_token": create_token(user, "refresh"),
+        "access_token": create_token(user, TokenType.ACCESS),
+        "refresh_token": create_token(user, TokenType.REFRESH),
         "token_type": "bearer",
         "expires_in": settings.jwt_access_token_minutes * 60,
     }
