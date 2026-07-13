@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -17,6 +18,7 @@ from app.storage.service import storage
 
 router = APIRouter(prefix="/files", tags=["files"])
 settings = get_settings()
+logger = logging.getLogger(__name__)
 
 
 def serialize_file(row: StoredFile) -> dict[str, object]:
@@ -53,8 +55,16 @@ def upload_file(
                 content_type=file.content_type,
                 conversation_id=conversation_id,
             )
+            logger.info(
+                "File uploaded user_id=%s file_id=%s size=%s backend=%s",
+                user.id,
+                row.id,
+                row.size_bytes,
+                row.storage_backend,
+            )
             return serialize_file(row)
     except UploadTooLargeError as exc:
+        logger.warning("File upload rejected user_id=%s reason=too_large", user.id)
         raise HTTPException(status_code=413, detail=str(exc)) from exc
 
 
@@ -112,4 +122,5 @@ def delete_file(
 ):
     row = _owned_file(db, user.id, file_id)
     FileService(db).delete(row)
+    logger.info("File deleted user_id=%s file_id=%s", user.id, file_id)
     return {"status": "deleted", "file_id": file_id}

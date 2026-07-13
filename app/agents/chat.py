@@ -11,6 +11,7 @@ Request flow:
 
 from __future__ import annotations
 
+import logging
 import time
 import uuid
 from collections.abc import Sequence
@@ -32,6 +33,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
+from app.core.logging import configure_logging
 from app.core.types import JsonObject
 from app.db.models import Conversation, TraceSpan
 from app.db.session import SessionLocal
@@ -46,6 +48,8 @@ from app.tools.registry import get_agent_tools
 from app.tracing.service import safe_json
 
 settings = get_settings()
+configure_logging(settings.log_level)
+logger = logging.getLogger(__name__)
 
 
 class ChatState(AgentState):
@@ -189,6 +193,12 @@ class PolicyTraceMiddleware(AgentMiddleware):
                 db.add(trace)
                 db.commit()
                 db.refresh(trace)
+            logger.info(
+                "Model call started user_id=%s thread_id=%s model=%s",
+                user_id,
+                _runtime_thread_id(request.runtime),
+                selected,
+            )
             return (
                 request.override(model=get_chat_model(selected, streaming=True)),
                 db,
@@ -208,6 +218,7 @@ class PolicyTraceMiddleware(AgentMiddleware):
         started: float,
     ) -> None:
         prompt, completion, total = _token_usage(response)
+        latency_ms = int((time.perf_counter() - started) * 1000)
         if user_id:
             record_token_usage(db, user_id, total)
         if trace:
@@ -215,10 +226,17 @@ class PolicyTraceMiddleware(AgentMiddleware):
             trace.prompt_tokens = prompt
             trace.completion_tokens = completion
             trace.total_tokens = total
-            trace.latency_ms = int((time.perf_counter() - started) * 1000)
+            trace.latency_ms = latency_ms
             trace.output = {"messages": _message_preview(response.result)}
             trace.ended_at = datetime.utcnow()
             db.commit()
+        logger.info(
+            "Model call completed user_id=%s model=%s latency_ms=%s tokens=%s",
+            user_id,
+            trace.model_name if trace else None,
+            latency_ms,
+            total,
+        )
 
     @staticmethod
     def _fail_trace(
@@ -227,12 +245,21 @@ class PolicyTraceMiddleware(AgentMiddleware):
         exc: Exception,
         started: float,
     ) -> None:
+        latency_ms = int((time.perf_counter() - started) * 1000)
         if trace:
             trace.status = "error"
             trace.error_message = str(exc)
-            trace.latency_ms = int((time.perf_counter() - started) * 1000)
+            trace.latency_ms = latency_ms
             trace.ended_at = datetime.utcnow()
             db.commit()
+        logger.warning(
+            "Agent call failed span=%s model=%s tool=%s error=%s latency_ms=%s",
+            trace.span_type if trace else None,
+            trace.model_name if trace else None,
+            trace.tool_name if trace else None,
+            type(exc).__name__,
+            latency_ms,
+        )
 
     def wrap_model_call(self, request: ModelRequest, handler):
         started = time.perf_counter()
@@ -291,6 +318,12 @@ class PolicyTraceMiddleware(AgentMiddleware):
                 db.add(trace)
                 db.commit()
                 db.refresh(trace)
+            logger.info(
+                "Tool call started user_id=%s thread_id=%s tool=%s",
+                user_id,
+                _runtime_thread_id(request.runtime),
+                name,
+            )
             return db, trace
         except Exception:
             db.close()
@@ -298,12 +331,18 @@ class PolicyTraceMiddleware(AgentMiddleware):
 
     @staticmethod
     def _finish_tool_call(db, trace, result, started: float):
+        latency_ms = int((time.perf_counter() - started) * 1000)
         if trace:
             trace.status = "success"
             trace.output = {"result": safe_json(getattr(result, "content", result))}
-            trace.latency_ms = int((time.perf_counter() - started) * 1000)
+            trace.latency_ms = latency_ms
             trace.ended_at = datetime.utcnow()
             db.commit()
+        logger.info(
+            "Tool call completed tool=%s latency_ms=%s",
+            trace.tool_name if trace else None,
+            latency_ms,
+        )
 
     def wrap_tool_call(self, request: ToolCallRequest, handler):
         started = time.perf_counter()

@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     app_env: str = Field(default="local", alias="APP_ENV")
     app_name: str = Field(default="HY-chat", alias="APP_NAME")
     app_port: int = Field(default=8000, alias="APP_PORT")
+    log_level: str = Field(default="INFO", alias="LOG_LEVEL")
 
     database_url: str = Field(
         default="postgresql+psycopg://hy_chat:hy_chat_password@localhost:5432/hy_chat_db",

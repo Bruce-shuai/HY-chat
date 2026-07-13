@@ -72,15 +72,22 @@ def delete_user(
     )
     db.delete(user)
     db.commit()
+    logger.info(
+        "Admin deleted user admin_id=%s user_id=%s stored_objects=%s",
+        current_admin.id,
+        user_id,
+        len(object_keys),
+    )
 
     for object_key in object_keys:
         try:
             storage.delete(object_key)
         except Exception:
             logger.warning(
-                "Failed to delete stored object for removed user",
+                "Failed to delete stored object user_id=%s object_key=%s",
+                user_id,
+                object_key,
                 exc_info=True,
-                extra={"user_id": user_id, "object_key": object_key},
             )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 

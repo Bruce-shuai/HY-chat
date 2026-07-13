@@ -7,6 +7,7 @@ while HTTP request handling belongs in ``app.api.routers``.
 
 from contextlib import asynccontextmanager
 from collections.abc import AsyncIterator
+import logging
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,9 +15,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.router import api_router
 from app.cache.service import cache
 from app.core.config import get_settings
+from app.core.logging import configure_logging
 from app.db.init_db import init_db
 
 settings = get_settings()
+configure_logging(settings.log_level)
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -24,8 +28,16 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     """Prepare shared infrastructure when the API process starts."""
 
     init_db()
-    cache.ping()
-    yield
+    cache_available = cache.ping()
+    logger.info(
+        "Application started env=%s cache_available=%s",
+        settings.app_env,
+        cache_available,
+    )
+    try:
+        yield
+    finally:
+        logger.info("Application stopped env=%s", settings.app_env)
 
 
 def _add_middleware(application: FastAPI) -> None:
@@ -54,9 +66,7 @@ def health_check():
 def _add_routes(application: FastAPI) -> None:
     """Register public endpoints and feature routers."""
 
-    application.add_api_route(
-        "/health", health_check, methods=["GET"], tags=["system"]
-    )
+    application.add_api_route("/health", health_check, methods=["GET"], tags=["system"])
     application.include_router(api_router)
 
 

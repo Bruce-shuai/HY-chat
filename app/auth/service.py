@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import datetime, timedelta
 from typing import TypedDict, cast
@@ -18,6 +19,7 @@ from app.db.models import User, UserPolicy
 
 settings = get_settings()
 password_hash = PasswordHash.recommended()
+logger = logging.getLogger(__name__)
 
 
 class AuthenticationError(ValueError):
@@ -77,6 +79,7 @@ def create_user(db: Session, email: str, password: str, display_name: str) -> Us
         db.rollback()
         raise ValueError("该邮箱已经注册") from exc
     db.refresh(user)
+    logger.info("User registered user_id=%s role=%s", user.id, user.role.value)
     return user
 
 
@@ -89,6 +92,7 @@ def authenticate_user(db: Session, email: str, password: str) -> User:
     user.last_login_at = datetime.utcnow()
     db.commit()
     db.refresh(user)
+    logger.info("User authenticated user_id=%s role=%s", user.id, user.role.value)
     return user
 
 
@@ -113,9 +117,7 @@ def create_token(user: User, token_type: TokenType) -> str:
     )
 
 
-def decode_token(
-    token: str, expected_type: TokenType | None = None
-) -> TokenPayload:
+def decode_token(token: str, expected_type: TokenType | None = None) -> TokenPayload:
     try:
         payload = cast(
             TokenPayload,

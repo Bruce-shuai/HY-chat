@@ -1,9 +1,18 @@
+import logging
+
 from app.agents.chat import _build_mock_graph
 from app.cache.service import CacheService
+from app.core.logging import configure_logging
 from app.models.catalog import list_models, resolve_model
 from app.rag.embeddings import EmbeddingService
 from app.tools.registry import tool_manifest
 from app.storage.service import storage
+
+
+def test_logging_configuration_sets_root_level():
+    configure_logging("DEBUG")
+    assert logging.getLogger().level == logging.DEBUG
+    configure_logging("INFO")
 
 
 class FakeRedis:
