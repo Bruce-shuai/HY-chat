@@ -10,7 +10,6 @@ def serialize_policy(policy: UserPolicy) -> dict[str, object]:
         "monthly_token_quota": policy.monthly_token_quota,
         "tokens_used": policy.tokens_used,
         "quota_reset_at": policy.quota_reset_at,
-        "allow_image_generation": policy.allow_image_generation,
         "allow_high_cost_tools": policy.allow_high_cost_tools,
     }
 

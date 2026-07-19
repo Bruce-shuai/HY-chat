@@ -7,12 +7,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from app.core.constants import (
     DEFAULT_AGENT_RUN_LIST_LIMIT,
     DEFAULT_AGENT_RUN_STATUS_TTL_SECONDS,
-    DEFAULT_IMAGE_API_TIMEOUT_SECONDS,
-    DEFAULT_IMAGE_DOWNLOAD_TIMEOUT_SECONDS,
-    DEFAULT_IMAGE_INPUT_MAX_BYTES,
-    DEFAULT_IMAGE_PROMPT_MAX_LENGTH,
     DEFAULT_UPLOAD_MAX_BYTES,
 )
+
+DEFAULT_JWT_SECRET_KEY = "change-me-in-production-hy-chat-secret"
+PRODUCTION_ENVIRONMENTS = {"prod", "production"}
 
 
 class Settings(BaseSettings):
@@ -30,25 +29,23 @@ class Settings(BaseSettings):
     redis_url: str = Field(default="redis://localhost:6379/0", alias="REDIS_URL")
 
     jwt_secret_key: str = Field(
-        default="change-me-in-production-hy-chat-secret",
+        default=DEFAULT_JWT_SECRET_KEY,
         alias="JWT_SECRET_KEY",
     )
     jwt_algorithm: str = Field(default="HS256", alias="JWT_ALGORITHM")
     jwt_access_token_minutes: int = Field(default=30, alias="JWT_ACCESS_TOKEN_MINUTES")
     jwt_refresh_token_days: int = Field(default=30, alias="JWT_REFRESH_TOKEN_DAYS")
+    initial_admin_email: str = Field(default="", alias="INITIAL_ADMIN_EMAIL")
     default_rpm_limit: int = Field(default=30, alias="DEFAULT_RPM_LIMIT")
     default_monthly_token_quota: int = Field(
         default=1_000_000,
         alias="DEFAULT_MONTHLY_TOKEN_QUOTA",
     )
-    default_allow_image_generation: bool = Field(
-        default=True,
-        alias="DEFAULT_ALLOW_IMAGE_GENERATION",
-    )
     default_allow_high_cost_tools: bool = Field(
         default=False,
         alias="DEFAULT_ALLOW_HIGH_COST_TOOLS",
     )
+    hitl_enabled: bool = Field(default=True, alias="HITL_ENABLED")
 
     zhipu_api_key: str = Field(default="", alias="ZHIPU_API_KEY")
     zhipu_base_url: str = Field(
@@ -58,29 +55,6 @@ class Settings(BaseSettings):
     zhipu_chat_models: str = Field(
         default="glm-5.2,glm-4.5,glm-4-flash",
         alias="ZHIPU_CHAT_MODELS",
-    )
-    zhipu_image_model: str = Field(default="glm-image", alias="ZHIPU_IMAGE_MODEL")
-    openai_image_api_key: str = Field(default="", alias="OPENAI_IMAGE_API_KEY")
-    openai_image_base_url: str = Field(
-        default="https://api.openai.com/v1",
-        alias="OPENAI_IMAGE_BASE_URL",
-    )
-    openai_image_model: str = Field(default="gpt-image-2", alias="OPENAI_IMAGE_MODEL")
-    image_api_timeout_seconds: float = Field(
-        default=DEFAULT_IMAGE_API_TIMEOUT_SECONDS,
-        alias="IMAGE_API_TIMEOUT_SECONDS",
-    )
-    image_download_timeout_seconds: float = Field(
-        default=DEFAULT_IMAGE_DOWNLOAD_TIMEOUT_SECONDS,
-        alias="IMAGE_DOWNLOAD_TIMEOUT_SECONDS",
-    )
-    image_prompt_max_length: int = Field(
-        default=DEFAULT_IMAGE_PROMPT_MAX_LENGTH,
-        alias="IMAGE_PROMPT_MAX_LENGTH",
-    )
-    image_input_max_bytes: int = Field(
-        default=DEFAULT_IMAGE_INPUT_MAX_BYTES,
-        alias="IMAGE_INPUT_MAX_BYTES",
     )
     zhipu_embedding_model: str = Field(
         default="embedding-3", alias="ZHIPU_EMBEDDING_MODEL"
@@ -162,6 +136,29 @@ class Settings(BaseSettings):
     @property
     def s3_enabled(self) -> bool:
         return self.storage_backend.lower() == "s3" and bool(self.s3_bucket)
+
+
+def validate_runtime_settings(settings: Settings) -> None:
+    """Fail fast when a production process starts with unsafe defaults."""
+
+    if settings.app_env.strip().lower() not in PRODUCTION_ENVIRONMENTS:
+        return
+
+    errors: list[str] = []
+    if (
+        settings.jwt_secret_key == DEFAULT_JWT_SECRET_KEY
+        or len(settings.jwt_secret_key) < 32
+    ):
+        errors.append("JWT_SECRET_KEY 必须替换为至少 32 个字符的随机值")
+    if not settings.initial_admin_email.strip():
+        errors.append("INITIAL_ADMIN_EMAIL 必须显式指定初始管理员邮箱")
+    if "*" in settings.cors_origin_list:
+        errors.append("生产环境 CORS_ORIGINS 不能包含通配符 *")
+    if settings.storage_backend.lower() == "s3" and not settings.s3_bucket:
+        errors.append("STORAGE_BACKEND=s3 时必须配置 S3_BUCKET")
+
+    if errors:
+        raise RuntimeError("生产配置不安全：" + "；".join(errors))
 
 
 @lru_cache

@@ -73,7 +73,6 @@ class UserPolicy(Base):
     monthly_token_quota: Mapped[int] = mapped_column(BigInteger, default=1_000_000)
     tokens_used: Mapped[int] = mapped_column(BigInteger, default=0)
     quota_reset_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-    allow_image_generation: Mapped[bool] = mapped_column(Boolean, default=True)
     allow_high_cost_tools: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
@@ -233,44 +232,6 @@ class ModelCall(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     agent_run: Mapped[AgentRun] = relationship(back_populates="model_calls")
-
-
-class ImageGeneration(Base):
-    __tablename__ = "image_generations"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    user_id: Mapped[str | None] = mapped_column(
-        String(36),
-        ForeignKey("users.id", ondelete="SET NULL"),
-        nullable=True,
-        index=True,
-    )
-    conversation_id: Mapped[str | None] = mapped_column(
-        String(36),
-        ForeignKey("conversations.id", ondelete="SET NULL"),
-        nullable=True,
-        index=True,
-    )
-    output_file_id: Mapped[str | None] = mapped_column(
-        "stored_file_id",
-        String(36),
-        ForeignKey("stored_files.id", ondelete="SET NULL"),
-        nullable=True,
-    )
-    source_file_id: Mapped[str | None] = mapped_column(
-        String(36),
-        ForeignKey("stored_files.id", ondelete="SET NULL"),
-        nullable=True,
-    )
-    provider: Mapped[str] = mapped_column(String(32), default="zhipu", index=True)
-    mode: Mapped[str] = mapped_column(String(32), default="text_to_image", index=True)
-    quality: Mapped[str] = mapped_column(String(32), default="auto")
-    prompt: Mapped[str] = mapped_column(Text, nullable=False)
-    model_name: Mapped[str] = mapped_column(String(128), nullable=False)
-    image_url: Mapped[str | None] = mapped_column(Text, nullable=True)
-    raw_response: Mapped[JsonObject] = mapped_column(JSON, default=dict)
-    status: Mapped[str] = mapped_column(String(32), default="success")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
 class KnowledgeDocument(Base):

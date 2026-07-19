@@ -18,7 +18,8 @@ RUN sed -ri \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY pyproject.toml README.md langgraph.json ./
+COPY pyproject.toml README.md langgraph.json alembic.ini ./
+COPY migrations ./migrations
 COPY app ./app
 
 EXPOSE 8000 2024

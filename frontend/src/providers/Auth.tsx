@@ -15,7 +15,6 @@ export type Policy = {
   monthly_token_quota: number;
   tokens_used: number;
   quota_reset_at: string;
-  allow_image_generation: boolean;
   allow_high_cost_tools: boolean;
 };
 

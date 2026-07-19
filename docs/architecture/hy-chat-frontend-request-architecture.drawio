@@ -8,7 +8,7 @@
     <mxCell id="lane-browser" value="浏览器 / React" style="swimlane;horizontal=0;startSize=130;fillColor=#EAF2FF;strokeColor=#4C78C2;fontSize=16;fontStyle=1;html=1;" vertex="1" parent="1">
       <mxGeometry x="20" y="60" width="1720" height="190" as="geometry"/>
     </mxCell>
-    <mxCell id="pages" value="&lt;b&gt;页面路由&lt;/b&gt;&lt;br&gt;/  聊天&lt;br&gt;/images  图片&lt;br&gt;/files  文件&lt;br&gt;/traces  追踪&lt;br&gt;/admin  管理" style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=12;fillColor=#FFFFFF;strokeColor=#4C78C2;fontSize=14;" vertex="1" parent="lane-browser">
+    <mxCell id="pages" value="&lt;b&gt;页面路由&lt;/b&gt;&lt;br&gt;/  聊天&lt;br&gt;/files  文件&lt;br&gt;/traces  追踪&lt;br&gt;/admin  管理" style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=12;fillColor=#FFFFFF;strokeColor=#4C78C2;fontSize=14;" vertex="1" parent="lane-browser">
       <mxGeometry x="160" y="35" width="220" height="130" as="geometry"/>
     </mxCell>
     <mxCell id="providers" value="&lt;b&gt;Provider 状态层&lt;/b&gt;&lt;br&gt;AuthProvider：JWT / 自动刷新&lt;br&gt;ThreadProvider：会话列表&lt;br&gt;StreamProvider：流式消息&lt;br&gt;ArtifactProvider：侧边内容" style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=12;fillColor=#FFFFFF;strokeColor=#4C78C2;fontSize=14;" vertex="1" parent="lane-browser">
@@ -38,7 +38,7 @@
     <mxCell id="langgraph" value="&lt;b&gt;LangGraph Agent :2024&lt;/b&gt;&lt;br&gt;/info&lt;br&gt;/threads、/runs、流式事件&lt;br&gt;Graph ID：hy-chat" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#3C9D5D;fontSize=14;" vertex="1" parent="lane-services">
       <mxGeometry x="810" y="40" width="300" height="120" as="geometry"/>
     </mxCell>
-    <mxCell id="fastapi" value="&lt;b&gt;FastAPI :8000&lt;/b&gt;&lt;br&gt;/auth  /models  /admin&lt;br&gt;/files  /images  /rag  /traces&lt;br&gt;JWT 鉴权与业务逻辑" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#3C9D5D;fontSize=14;" vertex="1" parent="lane-services">
+    <mxCell id="fastapi" value="&lt;b&gt;FastAPI :8000&lt;/b&gt;&lt;br&gt;/auth  /models  /admin&lt;br&gt;/files  /rag  /traces&lt;br&gt;JWT 鉴权与业务逻辑" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#3C9D5D;fontSize=14;" vertex="1" parent="lane-services">
       <mxGeometry x="1180" y="40" width="310" height="120" as="geometry"/>
     </mxCell>
     <mxCell id="lane-data" value="数据与外部能力" style="swimlane;horizontal=0;startSize=130;fillColor=#FFF8E6;strokeColor=#D6A100;fontSize=16;fontStyle=1;html=1;" vertex="1" parent="1">
@@ -50,7 +50,7 @@
     <mxCell id="redis" value="Redis&lt;br&gt;缓存 / 限流 / 状态" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#D6A100;fontSize=14;" vertex="1" parent="lane-data">
       <mxGeometry x="1060" y="45" width="190" height="90" as="geometry"/>
     </mxCell>
-    <mxCell id="storage" value="本地 / S3 存储&lt;br&gt;上传文件与生成图片" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#D6A100;fontSize=14;" vertex="1" parent="lane-data">
+    <mxCell id="storage" value="本地 / S3 存储&lt;br&gt;上传文件与 RAG 原文" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#D6A100;fontSize=14;" vertex="1" parent="lane-data">
       <mxGeometry x="1290" y="45" width="220" height="90" as="geometry"/>
     </mxCell>
     <mxCell id="e-pages-providers" edge="1" parent="1" source="pages" target="providers" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#4C78C2;strokeWidth=2;endArrow=classic;"><mxGeometry relative="1" as="geometry"/></mxCell>

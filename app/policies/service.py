@@ -4,12 +4,19 @@ from collections.abc import Mapping
 from datetime import datetime
 
 from redis.exceptions import RedisError
+from sqlalchemy import update
 from sqlalchemy.orm import Session
 
 from app.cache.service import redis
+from app.core.types import UserRole
 from app.db.models import User, UserPolicy
 
 HIGH_COST_TOOLS = {"web_search", "get_stock_quote"}
+WORKSPACE_READ_TOOLS = {
+    "list_workspace_files",
+    "read_workspace_file",
+    "search_workspace_code",
+}
 
 
 class PolicyViolation(PermissionError):
@@ -47,7 +54,9 @@ def get_policy(db: Session, user_id: str) -> UserPolicy:
     return policy
 
 
-def enforce_model(db: Session, user_id: str, model_name: str) -> UserPolicy:
+def authorize_model_access(db: Session, user_id: str, model_name: str) -> UserPolicy:
+    """Validate durable model permissions without consuming an RPM slot."""
+
     policy = get_policy(db, user_id)
     if model_name not in (policy.allowed_models or []):
         raise PolicyViolation(f"当前账号无权使用模型 {model_name}")
@@ -56,6 +65,11 @@ def enforce_model(db: Session, user_id: str, model_name: str) -> UserPolicy:
         and policy.tokens_used >= policy.monthly_token_quota
     ):
         raise PolicyViolation("本月 Token 配额已用尽")
+    return policy
+
+
+def enforce_model(db: Session, user_id: str, model_name: str) -> UserPolicy:
+    policy = authorize_model_access(db, user_id, model_name)
 
     minute = datetime.utcnow().strftime("%Y%m%d%H%M")
     key = f"policy:rpm:{user_id}:{minute}"
@@ -74,14 +88,30 @@ def enforce_model(db: Session, user_id: str, model_name: str) -> UserPolicy:
 def record_token_usage(db: Session, user_id: str, total_tokens: int) -> None:
     if total_tokens <= 0:
         return
-    policy = get_policy(db, user_id)
-    policy.tokens_used += total_tokens
+    get_policy(db, user_id)
+    db.execute(
+        update(UserPolicy)
+        .where(UserPolicy.user_id == user_id)
+        .values(tokens_used=UserPolicy.tokens_used + total_tokens)
+    )
     db.commit()
 
 
+def enforce_workspace_access(db: Session, user_id: str) -> None:
+    """Restrict the shared server workspace to active administrators."""
+
+    user = db.get(User, user_id)
+    if not user or not user.is_active:
+        raise PolicyViolation("账号不存在或已被停用")
+    if user.role != UserRole.ADMIN:
+        raise PolicyViolation("工作区仅限管理员访问")
+
+
 def enforce_tool(db: Session, user_id: str, tool_name: str) -> None:
+    if tool_name in WORKSPACE_READ_TOOLS:
+        enforce_workspace_access(db, user_id)
+        return
+
     policy = get_policy(db, user_id)
-    if tool_name == "generate_image" and not policy.allow_image_generation:
-        raise PolicyViolation("当前账号不允许生成图片")
     if tool_name in HIGH_COST_TOOLS and not policy.allow_high_cost_tools:
         raise PolicyViolation(f"当前账号不允许调用高成本工具 {tool_name}")

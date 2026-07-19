@@ -72,32 +72,6 @@ async def test_auth_roles_policy_and_token_revocation(tmp_path, monkeypatch):
             assert stats.status_code == 200
             assert stats.json()["users"] == 2
 
-            text_image = await client.post(
-                "/images/generations",
-                headers={"Authorization": f"Bearer {admin_token}"},
-                data={"prompt": "一只戴围巾的猫", "provider": "mock"},
-            )
-            assert text_image.status_code == 201
-            assert text_image.json()["mode"] == "text_to_image"
-            assert text_image.json()["output_file_id"]
-
-            edited_image = await client.post(
-                "/images/generations",
-                headers={"Authorization": f"Bearer {admin_token}"},
-                data={"prompt": "改成水彩画", "provider": "mock"},
-                files={"source_image": ("source.png", b"mock-png", "image/png")},
-            )
-            assert edited_image.status_code == 201
-            assert edited_image.json()["mode"] == "image_to_image"
-            assert edited_image.json()["source_file_id"]
-
-            image_content = await client.get(
-                f"/files/{edited_image.json()['output_file_id']}/content",
-                headers={"Authorization": f"Bearer {admin_token}"},
-            )
-            assert image_content.status_code == 200
-            assert image_content.headers["content-type"].startswith("image/svg+xml")
-
             policy = await client.patch(
                 f"/admin/users/{user_id}/policy",
                 headers={"Authorization": f"Bearer {admin_token}"},
@@ -105,7 +79,6 @@ async def test_auth_roles_policy_and_token_revocation(tmp_path, monkeypatch):
                     "allowed_models": ["glm-4.5"],
                     "rpm_limit": 5,
                     "monthly_token_quota": 100,
-                    "allow_image_generation": False,
                 },
             )
             assert policy.status_code == 200
@@ -123,11 +96,32 @@ async def test_auth_roles_policy_and_token_revocation(tmp_path, monkeypatch):
                 json={"title": "测试会话", "selected_model": "glm-4.5"},
             )
             assert conversation.status_code == 201
+            created_conversation = conversation.json()
+
+            renamed = await client.patch(
+                f"/conversations/by-thread/{created_conversation['thread_id']}",
+                headers={"Authorization": f"Bearer {user_token}"},
+                json={"title": "重命名会话"},
+            )
+            assert renamed.status_code == 200
+            assert renamed.json()["title"] == "重命名会话"
+
             conversations = await client.get(
                 "/conversations",
                 headers={"Authorization": f"Bearer {user_token}"},
             )
-            assert conversations.json()["conversations"][0]["title"] == "测试会话"
+            assert conversations.json()["conversations"][0]["title"] == "重命名会话"
+
+            deleted_conversation = await client.delete(
+                f"/conversations/by-thread/{created_conversation['thread_id']}",
+                headers={"Authorization": f"Bearer {user_token}"},
+            )
+            assert deleted_conversation.status_code == 200
+            conversations = await client.get(
+                "/conversations",
+                headers={"Authorization": f"Bearer {user_token}"},
+            )
+            assert conversations.json()["conversations"] == []
 
             revoked = await client.post(
                 "/auth/logout-all",

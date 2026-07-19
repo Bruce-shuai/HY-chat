@@ -83,7 +83,6 @@ function AdminContent() {
             .filter(Boolean),
           rpm_limit: Number(form.get("rpm")),
           monthly_token_quota: Number(form.get("quota")),
-          allow_image_generation: form.get("images") === "on",
           allow_high_cost_tools: form.get("high_cost") === "on",
         }),
       },
@@ -133,12 +132,12 @@ function AdminContent() {
   ] as const;
 
   return (
-    <main className="min-h-dvh bg-muted/30">
-      <header className="sticky top-0 z-20 border-b bg-background/90 backdrop-blur">
+    <main className="bg-muted/30 min-h-dvh">
+      <header className="bg-background/90 sticky top-0 z-20 border-b backdrop-blur">
         <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-3 sm:px-6">
           <Link
             href="/"
-            className="rounded-lg p-2 hover:bg-muted"
+            className="hover:bg-muted rounded-lg p-2"
           >
             <ArrowLeft className="size-5" />
           </Link>
@@ -152,47 +151,49 @@ function AdminContent() {
           {cards.map(([label, value, Icon]) => (
             <div
               key={label}
-              className="rounded-2xl border bg-background p-4"
+              className="bg-background rounded-2xl border p-4"
             >
-              <Icon className="mb-4 size-5 text-muted-foreground" />
+              <Icon className="text-muted-foreground mb-4 size-5" />
               <p className="text-2xl font-semibold">{value}</p>
-              <p className="text-xs text-muted-foreground">{label}</p>
+              <p className="text-muted-foreground text-xs">{label}</p>
             </div>
           ))}
         </section>
         <div className="mt-6 flex items-center justify-between">
           <h2 className="text-lg font-semibold">账号与 AI 权限</h2>
-          {message && <span className="text-sm text-muted-foreground">{message}</span>}
+          {message && (
+            <span className="text-muted-foreground text-sm">{message}</span>
+          )}
         </div>
         <section className="mt-3 space-y-3">
           {users.map((item) => (
             <form
               key={item.id}
               onSubmit={(event) => save(event, item)}
-              className="rounded-2xl border bg-background p-4 sm:p-5"
+              className="bg-background rounded-2xl border p-4 sm:p-5"
             >
               <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <h3 className="font-medium">{item.display_name}</h3>
-                  <p className="text-xs text-muted-foreground">{item.email}</p>
+                  <p className="text-muted-foreground text-xs">{item.email}</p>
                 </div>
-                <span className="rounded-full bg-muted px-2.5 py-1 text-xs">
+                <span className="bg-muted rounded-full px-2.5 py-1 text-xs">
                   已用 {item.policy.tokens_used.toLocaleString()} tokens
                 </span>
               </div>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                <label className="text-xs text-muted-foreground">
+                <label className="text-muted-foreground text-xs">
                   角色
                   <select
                     name="role"
                     defaultValue={item.role}
-                    className="mt-1 h-9 w-full rounded-md border bg-background px-2 text-sm"
+                    className="bg-background mt-1 h-9 w-full rounded-md border px-2 text-sm"
                   >
                     <option value="user">普通用户</option>
                     <option value="admin">管理员</option>
                   </select>
                 </label>
-                <label className="text-xs text-muted-foreground">
+                <label className="text-muted-foreground text-xs">
                   每分钟请求数
                   <Input
                     name="rpm"
@@ -201,7 +202,7 @@ function AdminContent() {
                     className="mt-1"
                   />
                 </label>
-                <label className="text-xs text-muted-foreground">
+                <label className="text-muted-foreground text-xs">
                   月 Token 配额
                   <Input
                     name="quota"
@@ -210,7 +211,7 @@ function AdminContent() {
                     className="mt-1"
                   />
                 </label>
-                <label className="text-xs text-muted-foreground sm:col-span-2 lg:col-span-1">
+                <label className="text-muted-foreground text-xs sm:col-span-2 lg:col-span-1">
                   允许模型
                   <Input
                     name="models"
@@ -231,15 +232,6 @@ function AdminContent() {
                 </label>
                 <label>
                   <input
-                    name="images"
-                    type="checkbox"
-                    defaultChecked={item.policy.allow_image_generation}
-                    className="mr-2"
-                  />
-                  图片生成
-                </label>
-                <label>
-                  <input
                     name="high_cost"
                     type="checkbox"
                     defaultChecked={item.policy.allow_high_cost_tools}
@@ -249,7 +241,7 @@ function AdminContent() {
                 </label>
                 <div className="ml-auto flex items-center gap-2">
                   {item.id === user.id ? (
-                    <span className="text-xs text-muted-foreground">
+                    <span className="text-muted-foreground text-xs">
                       当前账号
                     </span>
                   ) : (

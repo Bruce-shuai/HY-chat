@@ -28,7 +28,6 @@ class UserPolicyResponse(BaseModel):
     monthly_token_quota: int
     tokens_used: int
     quota_reset_at: datetime
-    allow_image_generation: bool
     allow_high_cost_tools: bool
 
 
@@ -61,5 +60,4 @@ class AdminPolicyUpdate(BaseModel):
     rpm_limit: int | None = Field(default=None, ge=1, le=10_000)
     monthly_token_quota: int | None = Field(default=None, ge=0)
     tokens_used: int | None = Field(default=None, ge=0)
-    allow_image_generation: bool | None = None
     allow_high_cost_tools: bool | None = None

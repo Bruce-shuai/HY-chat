@@ -7,6 +7,26 @@ from app.core.constants import DEFAULT_TRACE_PAYLOAD_MAX_CHARS
 from app.core.types import JsonObject, JsonValue
 from app.db.models import TraceSpan
 
+REDACTED_VALUE = "[REDACTED]"
+SENSITIVE_FIELD_NAMES = {
+    "api_key",
+    "apikey",
+    "authorization",
+    "cookie",
+    "id_token",
+    "password",
+    "refresh_token",
+    "secret",
+    "set_cookie",
+    "token",
+    "access_token",
+}
+
+
+def _is_sensitive_field(key: object) -> bool:
+    normalized = str(key).strip().lower().replace("-", "_")
+    return normalized in SENSITIVE_FIELD_NAMES or normalized.endswith("_secret")
+
 
 def safe_json(
     value: object,
@@ -17,7 +37,14 @@ def safe_json(
             return value[:max_length] + "…"
         return value
     if isinstance(value, Mapping):
-        return {str(key): safe_json(item, max_length) for key, item in value.items()}
+        return {
+            str(key): (
+                REDACTED_VALUE
+                if _is_sensitive_field(key)
+                else safe_json(item, max_length)
+            )
+            for key, item in value.items()
+        }
     if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
         return [safe_json(item, max_length) for item in value]
     if isinstance(value, BaseModel):

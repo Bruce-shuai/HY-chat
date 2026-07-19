@@ -18,10 +18,10 @@ The ECS security group must allow inbound TCP ports `80` and `443`. Port `22`
 should be restricted to trusted administration addresses when possible. The
 following public DNS records are required before requesting certificates:
 
-| Record | Type | Value |
-| --- | --- | --- |
-| `chat` | `A` | ECS public IPv4 address |
-| `api.chat` | `A` | ECS public IPv4 address |
+| Record     | Type | Value                   |
+| ---------- | ---- | ----------------------- |
+| `chat`     | `A`  | ECS public IPv4 address |
+| `api.chat` | `A`  | ECS public IPv4 address |
 
 Verify the deployment from the server without waiting for public DNS:
 
@@ -30,8 +30,14 @@ curl -fsS -H 'Host: api.chat.hy-ai.xyz' http://127.0.0.1/health
 curl -fsS -H 'Host: chat.hy-ai.xyz' http://127.0.0.1/ >/dev/null
 ```
 
-The first account registered through the HY-chat UI becomes the administrator.
-Register the intended owner account before inviting other users.
+Set `INITIAL_ADMIN_EMAIL` in the production `.env`. When no administrator exists,
+only that email can bootstrap the administrator account; other registrations remain
+ordinary users.
+
+The current agent container still runs the LangGraph development server. Its local
+checkpoint state is persisted in the `agent_state` volume to survive container
+rebuilds, but this stack should still be described as a single-host demo deployment,
+not a highly available LangGraph production deployment.
 
 ## Operations
 
@@ -47,6 +53,10 @@ docker compose --env-file .env -f deploy/ecs/compose.yml logs --tail=200
 # Pull source updates and rebuild
 git pull --ff-only
 docker compose --env-file .env -f deploy/ecs/compose.yml up -d --build --wait
+
+# Run database migrations manually when needed
+docker compose --env-file .env -f deploy/ecs/compose.yml run --rm api \
+  alembic upgrade head
 
 # Back up PostgreSQL
 docker exec hy-chat-postgres pg_dump -U hy_chat -d hy_chat_db -Fc \

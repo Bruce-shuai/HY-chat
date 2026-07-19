@@ -29,6 +29,7 @@ services:
       - ./workspace:/workspace
       - rag_data:/data/rag
       - storage_data:/data/storage
+      - agent_state:/app/.langgraph_api
     depends_on:
       postgres:
         condition: service_healthy
@@ -99,3 +100,4 @@ volumes:
   redis_data:
   rag_data:
   storage_data:
+  agent_state:

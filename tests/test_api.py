@@ -4,24 +4,38 @@ from types import SimpleNamespace
 import httpx
 import pytest
 
+import app.agents.chat as agent_chat_module
 import app.api.routers.chat as chat_module
 from app.agents.chat import _build_mock_graph
 from app.auth.dependencies import get_current_user
 from app.db.session import get_db
 from app.main import app
+from app.policies.service import PolicyViolation
 
 
 @pytest.mark.asyncio
 async def test_system_endpoints_and_sse(monkeypatch):
+    fake_session = SimpleNamespace(
+        scalar=lambda *_args: None,
+        add=lambda *_args: None,
+        commit=lambda: None,
+        refresh=lambda *_args: None,
+        close=lambda: None,
+    )
+    monkeypatch.setattr(agent_chat_module, "SessionLocal", lambda: fake_session)
+    monkeypatch.setattr(
+        agent_chat_module, "enforce_model", lambda *_args, **_kwargs: None
+    )
     monkeypatch.setattr(chat_module, "graph", _build_mock_graph())
-    monkeypatch.setattr(chat_module, "enforce_model", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        chat_module, "authorize_model_access", lambda *_args, **_kwargs: None
+    )
     policy = SimpleNamespace(
         allowed_models=chat_module.settings.available_chat_models,
         rpm_limit=30,
         monthly_token_quota=1000,
         tokens_used=0,
         quota_reset_at=datetime.utcnow(),
-        allow_image_generation=True,
         allow_high_cost_tools=True,
     )
     user = SimpleNamespace(id="test-user", role="user", policy=policy)
@@ -38,7 +52,7 @@ async def test_system_endpoints_and_sse(monkeypatch):
 
             tools = await client.get("/tools")
             assert tools.status_code == 200
-            assert len(tools.json()["tools"]) == 9
+            assert len(tools.json()["tools"]) == 7
 
             formats = await client.get("/rag/formats")
             assert ".pdf" in formats.json()["extensions"]
@@ -51,5 +65,36 @@ async def test_system_endpoints_and_sse(monkeypatch):
             assert response.headers["content-type"].startswith("text/event-stream")
             assert "event: token" in response.text
             assert "event: done" in response.text
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_cached_sse_still_enforces_current_model_policy(monkeypatch):
+    user = SimpleNamespace(id="test-user")
+    app.dependency_overrides[get_current_user] = lambda: user
+    app.dependency_overrides[get_db] = lambda: SimpleNamespace()
+    monkeypatch.setattr(chat_module.settings, "zhipu_api_key", "configured")
+    monkeypatch.setattr(
+        chat_module.cache,
+        "get_json",
+        lambda _key: {"content": "cached response"},
+    )
+
+    def reject_model(*_args):
+        raise PolicyViolation("当前账号无权使用该模型")
+
+    monkeypatch.setattr(chat_module, "authorize_model_access", reject_model)
+    transport = httpx.ASGITransport(app=app)
+    try:
+        async with httpx.AsyncClient(
+            transport=transport, base_url="http://test"
+        ) as client:
+            response = await client.post(
+                "/chat/stream",
+                json={"message": "hello", "use_cache": True},
+            )
+            assert response.status_code == 403
+            assert "无权使用" in response.json()["detail"]
     finally:
         app.dependency_overrides.clear()

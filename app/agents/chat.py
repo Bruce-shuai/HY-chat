@@ -11,16 +11,19 @@ Request flow:
 
 from __future__ import annotations
 
+import json
 import logging
 import time
 import uuid
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from datetime import date, datetime
 from typing import NotRequired
 
 from langchain.agents import AgentState, create_agent
 from langchain.agents.middleware import (
     AgentMiddleware,
+    HumanInTheLoopMiddleware,
+    InterruptOnConfig,
     ModelRequest,
     ModelResponse,
     ToolCallRequest,
@@ -58,7 +61,7 @@ class ChatState(AgentState):
     conversation_id: NotRequired[str]
 
 
-SYSTEM_PROMPT = f"""你是 HY-chat，一个具备通用对话、RAG 知识库检索、代码分析、联网搜索、天气查询、股票查询和图片生成能力的 AI 助手。
+SYSTEM_PROMPT = f"""你是 HY-chat，一个具备通用对话、RAG 知识库检索、代码分析、联网搜索、天气查询和股票查询能力的 AI 助手。
 
 当前日期：{date.today().isoformat()}。
 
@@ -67,11 +70,39 @@ SYSTEM_PROMPT = f"""你是 HY-chat，一个具备通用对话、RAG 知识库检
 2. 用户询问代码项目时，先使用工作区工具读取真实文件，不要编造未读取的内容。
 3. 用户询问最新信息或明确要求联网时，使用 web_search，并在回答中提供来源链接。
 4. 天气问题使用 get_weather；股票行情使用 get_stock_quote，并明确行情可能延迟且不构成投资建议。
-5. 用户要求文生图时直接使用 generate_image；要求图生图时先用 list_stored_images 找到 source_file_id，再调用 generate_image。
-6. 工具返回错误时，清楚说明缺少的配置或外部服务问题，不要虚构结果。
+5. 工具返回错误时，清楚说明缺少的配置或外部服务问题，不要虚构结果。
 
 默认使用中文回复，除非用户明确要求其他语言。
 """
+
+
+HITL_TOOL_CONFIG: dict[str, InterruptOnConfig] = {
+    "web_search": {
+        "allowed_decisions": ["approve", "edit", "reject"],
+        "description": "即将联网搜索，请确认搜索关键词和结果数量。",
+    },
+    "get_stock_quote": {
+        "allowed_decisions": ["approve", "edit", "reject"],
+        "description": "即将访问外部股票行情服务，请确认股票代码。",
+    },
+}
+
+
+def _supports_hitl_resume(request: ToolCallRequest) -> bool:
+    """Only interrupt runs served by LangGraph Server, which supports resume."""
+
+    return getattr(request.runtime, "server_info", None) is not None
+
+
+def build_hitl_middleware() -> HumanInTheLoopMiddleware:
+    interrupt_on: dict[str, InterruptOnConfig] = {
+        tool_name: {**config, "when": _supports_hitl_resume}
+        for tool_name, config in HITL_TOOL_CONFIG.items()
+    }
+    return HumanInTheLoopMiddleware(
+        interrupt_on=interrupt_on,
+        description_prefix="该工具需要人工确认",
+    )
 
 
 def _runtime_thread_id(runtime: object) -> str | None:
@@ -93,6 +124,69 @@ def _message_preview(messages: Sequence[BaseMessage]) -> list[JsonObject]:
         }
         for message in messages[-8:]
     ]
+
+
+def _content_title(content: object) -> str:
+    if isinstance(content, str):
+        return " ".join(content.split())
+    if isinstance(content, Mapping):
+        text = content.get("text")
+        return " ".join(text.split()) if isinstance(text, str) else ""
+    if isinstance(content, Sequence) and not isinstance(
+        content, str | bytes | bytearray
+    ):
+        texts: list[str] = []
+        has_non_text_block = False
+        for block in content:
+            if isinstance(block, str):
+                if block.strip():
+                    texts.append(block.strip())
+                continue
+            if not isinstance(block, Mapping):
+                continue
+            text = block.get("text")
+            if isinstance(text, str) and text.strip():
+                texts.append(text.strip())
+            elif block.get("type"):
+                has_non_text_block = True
+        if texts:
+            return " ".join(" ".join(texts).split())
+        return "附件消息" if has_non_text_block else ""
+    return ""
+
+
+def _conversation_title_from_state(state: ChatState) -> str:
+    for message in state.get("messages", []):
+        message_type = getattr(message, "type", None)
+        content = getattr(message, "content", "")
+        if isinstance(message, Mapping):
+            message_type = message.get("type") or message.get("role")
+            content = message.get("content", "")
+        if message_type not in {"human", "user"}:
+            continue
+        title = _content_title(content)
+        if title:
+            return title[:80]
+    return "新会话"
+
+
+def _tool_error_message(result: object) -> str | None:
+    """Extract structured tool failures so traces do not report false success."""
+
+    status = getattr(result, "status", None)
+    content = getattr(result, "content", result)
+    parsed = content
+    if isinstance(content, str):
+        try:
+            parsed = json.loads(content)
+        except json.JSONDecodeError:
+            parsed = content
+
+    if isinstance(parsed, Mapping) and parsed.get("error"):
+        return str(parsed["error"])
+    if status == "error":
+        return str(content)[:2_000] or "Tool call failed"
+    return None
 
 
 def _token_usage(response: ModelResponse) -> tuple[int, int, int]:
@@ -128,15 +222,10 @@ def _ensure_conversation(
     if conversation and conversation.user_id != user_id:
         raise PermissionError("无权访问该会话")
     if not conversation:
-        title = "新会话"
-        for message in state.get("messages", []):
-            if getattr(message, "type", None) in {"human", "user"}:
-                title = str(getattr(message, "content", ""))[:80] or title
-                break
         conversation = Conversation(
             user_id=user_id,
             thread_id=thread_id,
-            title=title,
+            title=_conversation_title_from_state(state),
             selected_model=model_name,
         )
         db.add(conversation)
@@ -289,7 +378,12 @@ class PolicyTraceMiddleware(AgentMiddleware):
 
     @staticmethod
     def _prepare_tool_call(request: ToolCallRequest):
-        user_id = runtime_user_id(request.runtime)
+        state_user_id = (
+            request.state.get("auth_user_id")
+            if isinstance(request.state, Mapping)
+            else None
+        )
+        user_id = runtime_user_id(request.runtime) or state_user_id
         name = str(request.tool_call.get("name") or "unknown")
         db = SessionLocal()
         try:
@@ -332,9 +426,11 @@ class PolicyTraceMiddleware(AgentMiddleware):
     @staticmethod
     def _finish_tool_call(db, trace, result, started: float):
         latency_ms = int((time.perf_counter() - started) * 1000)
+        error_message = _tool_error_message(result)
         if trace:
-            trace.status = "success"
+            trace.status = "error" if error_message else "success"
             trace.output = {"result": safe_json(getattr(result, "content", result))}
+            trace.error_message = error_message
             trace.latency_ms = latency_ms
             trace.ended_at = datetime.utcnow()
             db.commit()
@@ -387,12 +483,11 @@ def _build_mock_graph():
             )
         )
         server_user_id = runtime_user_id(runtime)
-        user_id = server_user_id
+        user_id = server_user_id or state.get("auth_user_id")
         if user_id:
             db = SessionLocal()
             try:
-                if server_user_id:
-                    enforce_model(db, user_id, selected)
+                enforce_model(db, user_id, selected)
                 conversation = _ensure_conversation(
                     db,
                     user_id,
@@ -441,11 +536,15 @@ def build_chat_graph():
     if not settings.zhipu_api_key:
         return _build_mock_graph()
 
+    middleware: list[AgentMiddleware] = [PolicyTraceMiddleware()]
+    if settings.hitl_enabled:
+        middleware.append(build_hitl_middleware())
+
     return create_agent(
         model=get_chat_model(settings.zhipu_chat_model, streaming=True),
         tools=get_agent_tools(),
         system_prompt=SYSTEM_PROMPT,
-        middleware=[PolicyTraceMiddleware()],
+        middleware=middleware,
         state_schema=ChatState,
         name="hy-chat",
     )

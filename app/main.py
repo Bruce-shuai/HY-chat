@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.router import api_router
 from app.cache.service import cache
-from app.core.config import get_settings
+from app.core.config import get_settings, validate_runtime_settings
 from app.core.logging import configure_logging
 from app.db.init_db import init_db
 
@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     """Prepare shared infrastructure when the API process starts."""
 
+    validate_runtime_settings(settings)
     init_db()
     cache_available = cache.ping()
     logger.info(

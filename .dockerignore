@@ -1,0 +1,44 @@
+# Version-control and CI metadata
+.git
+.github
+.gitignore
+
+# Local configuration and secrets
+.env
+.env.*
+**/.env
+**/.env.*
+
+# Python development artifacts
+.venv
+venv
+**/__pycache__
+*.py[cod]
+.pytest_cache
+.ruff_cache
+.mypy_cache
+.coverage
+htmlcov
+.langgraph_api
+
+# Frontend development artifacts
+node_modules
+**/node_modules
+.next
+**/.next
+.turbo
+**/.turbo
+
+# Build output, logs, and editor metadata
+build
+dist
+*.log
+.DS_Store
+.idea
+.vscode
+
+# Files that are not required by either production image. The deploy directory
+# stays in context because Dockerfile.pgvector copies its vendored source archive.
+docs
+tests
+workspace

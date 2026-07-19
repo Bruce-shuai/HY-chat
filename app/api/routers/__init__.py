@@ -4,7 +4,6 @@ from app.api.routers.chat import router as chat_router
 from app.api.routers.coding_agent import router as coding_agent_router
 from app.api.routers.conversations import router as conversations_router
 from app.api.routers.files import router as files_router
-from app.api.routers.images import router as images_router
 from app.api.routers.rag import router as rag_router
 from app.api.routers.system import router as system_router
 from app.api.routers.traces import router as traces_router
@@ -16,7 +15,6 @@ __all__ = [
     "coding_agent_router",
     "conversations_router",
     "files_router",
-    "images_router",
     "rag_router",
     "system_router",
     "traces_router",

@@ -51,17 +51,34 @@ def verify_password(password: str, encoded: str) -> bool:
     return password_hash.verify(password, encoded)
 
 
+def _should_bootstrap_admin(db: Session, normalized_email: str) -> bool:
+    """Choose the first administrator without exposing production to a race to register."""
+
+    configured_email = settings.initial_admin_email.strip().lower()
+    if configured_email:
+        admin_count = (
+            db.scalar(
+                select(func.count())
+                .select_from(User)
+                .where(User.role == UserRole.ADMIN)
+            )
+            or 0
+        )
+        return admin_count == 0 and normalized_email == configured_email
+    return (db.scalar(select(func.count()).select_from(User)) or 0) == 0
+
+
 def create_user(db: Session, email: str, password: str, display_name: str) -> User:
     normalized_email = email.strip().lower()
     if db.scalar(select(User).where(User.email == normalized_email)):
         raise ValueError("该邮箱已经注册")
 
-    is_first_user = (db.scalar(select(func.count()).select_from(User)) or 0) == 0
+    is_bootstrap_admin = _should_bootstrap_admin(db, normalized_email)
     user = User(
         email=normalized_email,
         display_name=display_name.strip(),
         password_hash=hash_password(password),
-        role=UserRole.ADMIN if is_first_user else UserRole.USER,
+        role=UserRole.ADMIN if is_bootstrap_admin else UserRole.USER,
     )
     user.policy = UserPolicy(
         allowed_models=settings.available_chat_models,
@@ -69,7 +86,6 @@ def create_user(db: Session, email: str, password: str, display_name: str) -> Us
         monthly_token_quota=settings.default_monthly_token_quota,
         tokens_used=0,
         quota_reset_at=_next_quota_reset(),
-        allow_image_generation=settings.default_allow_image_generation,
         allow_high_cost_tools=settings.default_allow_high_cost_tools,
     )
     db.add(user)

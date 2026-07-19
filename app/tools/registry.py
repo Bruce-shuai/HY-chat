@@ -4,8 +4,6 @@ from langchain_core.tools import BaseTool
 
 from app.core.types import JsonObject
 from app.tools.builtin import (
-    generate_image,
-    list_stored_images,
     list_workspace_files,
     read_workspace_file,
     search_workspace_code,
@@ -25,8 +23,6 @@ def get_agent_tools() -> list[BaseTool]:
         web_search,
         get_weather,
         get_stock_quote,
-        list_stored_images,
-        generate_image,
     ]
 
 

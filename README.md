@@ -12,12 +12,11 @@ HY-chat 是一个面向多用户的 AI 聊天工作台，基于 LangChain Agent 
 - 多轮对话、会话历史、新建与切换会话
 - 注册、登录、JWT Access/Refresh Token、保存并切换多个账号
 - 管理员与普通用户角色，以及简单的 Web 管理后台
-- 每用户模型白名单、RPM、月 Token 配额、图片生成和高成本工具权限
+- 每用户模型白名单、RPM、月 Token 配额和高成本工具权限
 - PDF、DOCX、PPTX、XLSX、TXT、Markdown、HTML、CSV、JSON RAG
 - Tavily Web Search、Open-Meteo Weather、Alpha Vantage Stock Tool Calling
 - 动态模型选择、LangGraph 流式协议与 FastAPI SSE
 - 模型和工具 Trace：输入、输出、耗时、Token、状态与错误
-- 图片工作台：智谱/OpenAI 文生图、OpenAI 图生图、Mock 全链路自测
 - 本地文件存储或 AWS S3、MinIO、Cloudflare R2 等 S3 兼容存储
 - Redis 对话、Embedding、RAG 和外部工具缓存
 
@@ -48,7 +47,9 @@ docker compose up --build
 - FastAPI / OpenAPI：<http://localhost:8000/docs>
 - 健康检查：<http://localhost:8000/health>
 
-LangGraph Agent Server 在 Compose 网络中由 Web UI 的 `/api` 反向代理访问，不再直接暴露 `2024` 端口，避免绕过 JWT 和线程权限。首次注册的账号自动成为管理员，后续注册账号默认为普通用户。
+LangGraph Agent Server 在 Compose 网络中由 Web UI 的 `/api` 反向代理访问，不再直接暴露 `2024` 端口，避免绕过 JWT 和线程权限。本地未配置 `INITIAL_ADMIN_EMAIL` 时首个注册账号自动成为管理员；生产环境必须显式配置该邮箱，避免公开注册时被抢占管理员身份。
+
+当前 Compose 仍使用 LangGraph 开发服务器，Checkpoint/HITL 状态通过 `agent_state` Volume 保留，适合单机演示与面试环境；它不等同于正式的 LangGraph 生产部署。
 
 ## 本地开发
 
@@ -75,6 +76,22 @@ corepack pnpm dev
 ```
 
 前端浏览器访问 `/api`，Next.js 服务端通过 `LANGGRAPH_API_URL=http://localhost:2024` 转发到 Agent Server，并保留浏览器发送的 Bearer Token。
+
+## 数据库迁移
+
+项目使用 Alembic 管理 PostgreSQL Schema，启动 FastAPI 或 LangGraph Agent 时会自动执行 `alembic upgrade head`。手动升级可运行：
+
+```bash
+uv run alembic upgrade head
+```
+
+新增或调整 SQLAlchemy Model 后生成迁移：
+
+```bash
+uv run alembic revision --autogenerate -m "describe schema change"
+```
+
+如果在宿主机直接执行迁移，而 `.env` 里的 `DATABASE_URL` 仍使用 Compose 内部服务名 `postgres`，需要临时覆盖为 `localhost` 连接地址。
 
 ## 身份认证与账号切换
 
@@ -109,7 +126,6 @@ curl -X POST http://localhost:8000/auth/register \
 - 可调用模型列表
 - 每分钟模型请求次数
 - 每月 Token 配额
-- 是否允许图片生成
 - 是否允许 Web Search、Stock 等高成本工具
 
 这些策略由 Agent Server 的模型/工具中间件执行，不依赖前端按钮是否显示。Redis 用于原子 RPM 计数；模型和 Token 权限仍由数据库强制执行，Redis 暂时不可用时聊天不会整体中断。
@@ -129,6 +145,16 @@ curl http://localhost:8000/traces/<trace_id> \
 ```
 
 如配置 `LANGSMITH_API_KEY` 与 `LANGSMITH_TRACING=true`，仍可同时在 LangSmith 中查看更完整的分布式 Trace。
+
+## 人工审批（HITL）
+
+Web 聊天默认对 `web_search` 和 `get_stock_quote` 启用人工审批。模型准备调用这些工具时，LangGraph 会暂停运行，前端允许用户批准、修改参数或拒绝，然后从同一 Thread checkpoint 继续执行。
+
+```env
+HITL_ENABLED=true
+```
+
+设置为 `false` 可关闭人工审批。HITL 仅在 LangGraph Server 链路启用；FastAPI 的 `/chat/stream` 当前没有中断恢复协议，因此会直接执行已经通过账号权限检查的工具。
 
 ## RAG 知识库
 
@@ -180,45 +206,9 @@ S3_PRESIGN_EXPIRY_SECONDS=900
 - `GET /files/{id}/download-url`
 - `DELETE /files/{id}`
 
-RAG 原始文件和模型生成图片也会进入同一存储层。
+RAG 原始文件和用户上传附件也会进入同一存储层。
 
-## 文生图与图生图
-
-图片工作台：<http://localhost:3000/images>。
-
-- 不上传来源图：文生图，`auto` 会优先使用已配置的智谱图片模型
-- 上传 JPG、PNG 或 WebP：图生图，`auto` 会使用 OpenAI Images Edit
-- 未配置图片 Key：自动使用 Mock Provider，仍会完整验证权限、上传、数据库和存储链路
-
-配置：
-
-```env
-ZHIPU_IMAGE_MODEL=glm-image
-OPENAI_IMAGE_API_KEY=
-OPENAI_IMAGE_BASE_URL=https://api.openai.com/v1
-OPENAI_IMAGE_MODEL=gpt-image-2
-IMAGE_INPUT_MAX_BYTES=52428800
-```
-
-智谱当前图片生成 API 是文本输入，因此不把“视觉理解后重写提示词”冒充成图生图。真正的图片编辑走 `/v1/images/edits`。REST 接口：
-
-```bash
-# 文生图
-curl -X POST http://localhost:8000/images/generations \
-  -H 'Authorization: Bearer <access_token>' \
-  -F 'prompt=一只戴围巾的猫' \
-  -F 'provider=auto' \
-  -F 'size=1024x1024'
-
-# 图生图
-curl -X POST http://localhost:8000/images/generations \
-  -H 'Authorization: Bearer <access_token>' \
-  -F 'prompt=把它改成水彩插画' \
-  -F 'source_image=@./source.png;type=image/png' \
-  -F 'provider=auto'
-```
-
-其他接口：`GET /images/capabilities`、`GET /images/generations`、`GET /images/generations/{id}`。聊天 Agent 也可以先调用 `list_stored_images`，再把 `source_file_id` 交给 `generate_image` 完成图生图。
+## Coding Agent
 
 Coding Agent 路由已从含义不清的 `/agent/*` 调整为：
 
@@ -258,7 +248,6 @@ cd frontend && corepack pnpm@10.5.1 build
 - [前端架构](docs/architecture/hy-chat-frontend-architecture.png)
 - [后端架构](docs/architecture/hy-chat-backend-architecture.png)
 - [聊天、RAG 与 Tool Calling 流程](docs/architecture/chat-rag-tool-flow.drawio)
-- [文生图与图生图流程](docs/architecture/image-generation-flow.drawio)
 - [JWT、权限与配额校验流程](docs/architecture/auth-policy-flow.drawio)
 
 前后端架构图使用 PNG 格式；专项流程图使用原生 draw.io `mxGraphModel` 格式，可继续编辑和导出 PNG、SVG 或 PDF。

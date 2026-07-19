@@ -144,11 +144,10 @@ def render_frontend() -> Path:
 
     section(draw, (60, 145, 1940, 360), "① 页面与路由层", BLUE)
     pages = [
-        ((100, 215, 410, 325), "聊天主页 /", "Thread UI\n响应式对话工作台", BLUE),
-        ((460, 215, 770, 325), "图片 /images", "生成历史、文生图\n图生图与素材选择", PURPLE),
-        ((820, 215, 1130, 325), "文件 /files", "上传、查看、下载\n统一文件工作台", GREEN),
-        ((1180, 215, 1490, 325), "Trace /traces", "模型与工具调用\n状态、耗时、Token", ORANGE),
-        ((1540, 215, 1850, 325), "管理 /admin", "用户、角色\n配额与模型策略", RED),
+        ((140, 215, 500, 325), "聊天主页 /", "Thread UI\n响应式对话工作台", BLUE),
+        ((590, 215, 950, 325), "文件 /files", "上传、查看、下载\n统一文件工作台", GREEN),
+        ((1040, 215, 1400, 325), "Trace /traces", "模型与工具调用\n状态、耗时、Token", ORANGE),
+        ((1490, 215, 1850, 325), "管理 /admin", "用户、角色\n配额与模型策略", RED),
     ]
 
     section(draw, (60, 400, 1940, 685), "② 全局状态与编排层", PURPLE)
@@ -216,7 +215,7 @@ def render_backend() -> Path:
 
     section(draw, (60, 385, 2040, 665), "② API 与 Agent 编排层", PURPLE)
     orchestration = [
-        ((105, 470, 455, 610), "业务 Routers", "Auth · Conversations · Files\nRAG · Images · Admin · Traces", GREEN),
+        ((105, 470, 455, 610), "业务 Routers", "Auth · Conversations · Files\nRAG · Admin · Traces", GREEN),
         ((505, 470, 855, 610), "Coding Agent Graph", "扫描 → 搜索 → 读取\n→ 计划 → 总结", ORANGE),
         ((905, 470, 1255, 610), "Chat Agent", "模型推理 ↔ Tool Calling\nThread 状态与流式输出", PURPLE),
         ((1305, 470, 1655, 610), "PolicyTraceMiddleware", "模型/工具权限 · RPM\nToken 配额 · Trace", RED),
@@ -230,24 +229,22 @@ def render_backend() -> Path:
 
     section(draw, (60, 705, 2040, 985), "③ 能力与领域服务层", GREEN)
     capabilities = [
-        ((105, 790, 405, 930), "Tool Registry", "Workspace · RAG · Web\n天气 · 股票 · 图片", ORANGE),
+        ((105, 790, 405, 930), "Tool Registry", "Workspace · RAG · Web\n天气 · 股票", ORANGE),
         ((455, 790, 755, 930), "RAG Service", "文档 Loader · Chunk\nEmbedding · 向量检索", CYAN),
-        ((805, 790, 1105, 930), "Image Service", "Provider 路由\n文生图 / 图生图 / Mock", PURPLE),
-        ((1155, 790, 1455, 930), "Storage Service", "Local / S3 抽象\n预签名 URL", BLUE),
-        ((1505, 790, 1805, 930), "Policy Service", "用户策略 · 限流\nToken 使用统计", RED),
-        ((1855, 790, 1995, 930), "Cache", "JSON\n降级", GRAY),
+        ((805, 790, 1105, 930), "Storage Service", "Local / S3 抽象\n预签名 URL", BLUE),
+        ((1155, 790, 1455, 930), "Policy Service", "用户策略 · 限流\nToken 使用统计", RED),
+        ((1505, 790, 1805, 930), "Cache", "JSON\n降级", GRAY),
     ]
     arrow(draw, [(1080, 610), (1080, 705), (255, 705), (255, 790)], "调用工具", ORANGE[1])
     arrow(draw, [(405, 860), (455, 860)], "知识库", CYAN[1])
     arrow(draw, [(755, 880), (805, 880)], "Embedding", PURPLE[1])
-    arrow(draw, [(1105, 860), (1155, 860)], "保存产物", BLUE[1])
-    arrow(draw, [(1480, 610), (1655, 790)], "强制执行", RED[1])
+    arrow(draw, [(1105, 860), (1155, 860)], "强制执行", RED[1])
 
     section(draw, (60, 1025, 2040, 1265), "④ 数据与基础设施层", CYAN)
     data = [
         ((105, 1100, 455, 1215), "PostgreSQL + pgvector", "用户/策略/会话/Trace\n文档分块与向量", GREEN),
         ((535, 1100, 885, 1215), "Redis", "响应/Embedding/工具缓存\nRPM 与运行状态", RED),
-        ((965, 1100, 1315, 1215), "Local / S3 Storage", "上传文件、RAG 原文\n来源图与生成图片", BLUE),
+        ((965, 1100, 1315, 1215), "Local / S3 Storage", "上传文件\nRAG 原文与附件", BLUE),
         ((1395, 1100, 1745, 1215), "Shared Workspace", "Coding Agent 代码扫描\n安全路径约束", ORANGE),
         ((1825, 1100, 1995, 1215), "Volumes", "持久化\n共享", GRAY),
     ]
@@ -258,16 +255,14 @@ def render_backend() -> Path:
 
     section(draw, (60, 1305, 2040, 1435), "⑤ 外部服务", ORANGE)
     external = [
-        ((105, 1350, 480, 1410), "智谱 GLM", "Chat · Embedding · 文生图", PURPLE),
-        ((540, 1350, 915, 1410), "OpenAI Images", "图片编辑 / 图生图", PURPLE),
-        ((975, 1350, 1390, 1410), "外部数据工具", "Tavily · Open-Meteo · Alpha Vantage", ORANGE),
-        ((1450, 1350, 1770, 1410), "LangSmith（可选）", "分布式 Trace", GRAY),
-        ((1830, 1350, 1995, 1410), "Mock", "无 Key\n自测", CYAN),
+        ((105, 1350, 480, 1410), "智谱 GLM", "Chat · Embedding", PURPLE),
+        ((540, 1350, 955, 1410), "外部数据工具", "Tavily · Open-Meteo · Alpha Vantage", ORANGE),
+        ((1015, 1350, 1335, 1410), "LangSmith（可选）", "分布式 Trace", GRAY),
+        ((1395, 1350, 1715, 1410), "Mock", "无 Key\n自测", CYAN),
     ]
     arrow(draw, [(1850, 610), (2030, 610), (2030, 1285), (290, 1285), (290, 1350)], "模型", PURPLE[1])
-    arrow(draw, [(955, 930), (727, 1350)], "图片", PURPLE[1])
-    arrow(draw, [(255, 930), (1180, 1350)], "联网工具", ORANGE[1])
-    arrow(draw, [(1480, 610), (1610, 1350)], "可选 Trace", GRAY[1], dashed=True)
+    arrow(draw, [(255, 930), (750, 1350)], "联网工具", ORANGE[1])
+    arrow(draw, [(1480, 610), (1175, 1350)], "可选 Trace", GRAY[1], dashed=True)
 
     for args in ingress + orchestration + capabilities + data + external:
         card(draw, *args, title_size=21, body_size=17)

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 
+from app.core.config import get_settings, validate_runtime_settings
 from app.core.constants import AGENT_SERVER_DEFAULT_PORT, API_SERVER_DEFAULT_PORT
 
 
@@ -12,6 +13,7 @@ def _port(default: int) -> str:
 
 
 def main() -> None:
+    validate_runtime_settings(get_settings())
     service_role = os.getenv("SERVICE_ROLE", "api").strip().lower()
     if service_role == "agent":
         command = [
@@ -23,6 +25,7 @@ def main() -> None:
             _port(AGENT_SERVER_DEFAULT_PORT),
             "--no-browser",
             "--no-reload",
+            "--allow-blocking",
         ]
     else:
         command = [

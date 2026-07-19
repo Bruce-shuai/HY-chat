@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import tempfile
 from contextlib import contextmanager
 from pathlib import Path
@@ -9,6 +10,8 @@ from sqlalchemy.orm import Session
 
 from app.db.models import StoredFile
 from app.storage.service import storage
+
+logger = logging.getLogger(__name__)
 
 
 class FileNotOwnedError(FileNotFoundError):
@@ -40,8 +43,19 @@ class FileService:
             sha256=stored.sha256,
         )
         self.db.add(row)
-        self.db.commit()
-        self.db.refresh(row)
+        try:
+            self.db.commit()
+            self.db.refresh(row)
+        except Exception:
+            self.db.rollback()
+            try:
+                storage.delete(stored.object_key)
+            except Exception:
+                logger.exception(
+                    "Failed to compensate orphaned storage object key=%s",
+                    stored.object_key,
+                )
+            raise
         return row
 
     def get_owned(self, user_id: str, file_id: str) -> StoredFile:

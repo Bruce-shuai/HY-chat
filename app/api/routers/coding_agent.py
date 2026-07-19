@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException
+from redis.exceptions import RedisError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.agents.graph import run_agent_graph
-from app.auth.dependencies import get_current_user
-from app.core.types import UserRole
+from app.auth.dependencies import get_current_user, require_admin
 from app.core.config import get_settings
+from app.core.types import UserRole
 from app.db.models import AgentRun, ModelCall, ToolCall, User
 from app.db.session import get_db
 from app.policies.service import enforce_model
@@ -22,8 +25,31 @@ from app.schemas.agent import (
 from app.services.redis_client import redis_client
 from app.tools.file_tools import safe_path
 
-router = APIRouter(prefix="/coding-agent", tags=["coding-agent"])
+router = APIRouter(
+    prefix="/coding-agent",
+    tags=["coding-agent"],
+    dependencies=[Depends(require_admin)],
+)
 settings = get_settings()
+logger = logging.getLogger(__name__)
+
+
+def _set_cached_run_status(status_key: str, status: str) -> None:
+    """Keep Redis status best-effort; PostgreSQL remains the source of truth."""
+
+    try:
+        redis_client.setex(
+            status_key,
+            settings.agent_run_status_ttl_seconds,
+            status,
+        )
+    except RedisError:
+        logger.warning(
+            "Coding Agent status cache unavailable key=%s status=%s",
+            status_key,
+            status,
+            exc_info=True,
+        )
 
 
 @router.post("/runs", response_model=AgentRunResponse, status_code=201)
@@ -49,11 +75,7 @@ def create_coding_agent_run(
     db.refresh(run)
 
     status_key = f"coding_agent_run:{run.id}:status"
-    redis_client.setex(
-        status_key,
-        settings.agent_run_status_ttl_seconds,
-        "running",
-    )
+    _set_cached_run_status(status_key, "running")
 
     try:
         output = run_agent_graph(
@@ -66,21 +88,13 @@ def create_coding_agent_run(
         run.status = "success"
         run.final_output = output
         db.commit()
-        redis_client.setex(
-            status_key,
-            settings.agent_run_status_ttl_seconds,
-            "success",
-        )
+        _set_cached_run_status(status_key, "success")
         return AgentRunResponse(run_id=run.id, status="success", output=output)
     except Exception as exc:
         run.status = "failed"
         run.error_message = str(exc)
         db.commit()
-        redis_client.setex(
-            status_key,
-            settings.agent_run_status_ttl_seconds,
-            "failed",
-        )
+        _set_cached_run_status(status_key, "failed")
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
