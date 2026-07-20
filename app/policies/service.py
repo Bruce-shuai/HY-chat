@@ -10,8 +10,13 @@ from sqlalchemy.orm import Session
 from app.cache.service import redis
 from app.core.types import UserRole
 from app.db.models import User, UserPolicy
+from app.models.catalog import normalize_model_allowlist
 
-HIGH_COST_TOOLS = {"web_search", "get_stock_quote"}
+HIGH_COST_TOOLS = {"get_stock_quote"}
+TOOL_LABELS = {
+    "get_stock_quote": "股票行情",
+    "web_search": "网页搜索",
+}
 WORKSPACE_READ_TOOLS = {
     "list_workspace_files",
     "read_workspace_file",
@@ -43,6 +48,12 @@ def get_policy(db: Session, user_id: str) -> UserPolicy:
         raise PolicyViolation("账号不存在或已被停用")
     policy = user.policy
     now = datetime.utcnow()
+    changed = False
+    current_allowed_models = list(getattr(policy, "allowed_models", None) or [])
+    normalized_models = normalize_model_allowlist(current_allowed_models)
+    if normalized_models != current_allowed_models:
+        policy.allowed_models = normalized_models
+        changed = True
     if policy.quota_reset_at <= now:
         policy.tokens_used = 0
         policy.quota_reset_at = (
@@ -50,6 +61,8 @@ def get_policy(db: Session, user_id: str) -> UserPolicy:
             if now.month == 12
             else datetime(now.year, now.month + 1, 1)
         )
+        changed = True
+    if changed:
         db.commit()
     return policy
 
@@ -64,7 +77,7 @@ def authorize_model_access(db: Session, user_id: str, model_name: str) -> UserPo
         policy.monthly_token_quota >= 0
         and policy.tokens_used >= policy.monthly_token_quota
     ):
-        raise PolicyViolation("本月 Token 配额已用尽")
+        raise PolicyViolation("本月标记配额已用尽")
     return policy
 
 
@@ -114,4 +127,7 @@ def enforce_tool(db: Session, user_id: str, tool_name: str) -> None:
 
     policy = get_policy(db, user_id)
     if tool_name in HIGH_COST_TOOLS and not policy.allow_high_cost_tools:
-        raise PolicyViolation(f"当前账号不允许调用高成本工具 {tool_name}")
+        label = TOOL_LABELS.get(tool_name, tool_name)
+        raise PolicyViolation(
+            f"已被高成本工具权限拦截：当前账号暂未开通{label}，请联系管理员开启后再试"
+        )

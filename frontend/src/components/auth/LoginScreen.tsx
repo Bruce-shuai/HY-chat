@@ -8,6 +8,11 @@ import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { BrandLogo } from "@/components/brand-logo";
 
+function getLoginErrorMessage(reason: unknown) {
+  const message = reason instanceof Error ? reason.message : String(reason);
+  return /[\u4e00-\u9fff]/.test(message) ? message : "认证失败，请稍后重试。";
+}
+
 export function LoginScreen() {
   const { login, register, accounts, switchAccount } = useAuth();
   const [mode, setMode] = useState<"login" | "register">("login");
@@ -30,15 +35,16 @@ export function LoginScreen() {
         );
       }
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : String(reason));
+      console.error("认证失败", reason);
+      setError(getLoginErrorMessage(reason));
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <main className="flex min-h-dvh items-center justify-center bg-muted/30 p-4 sm:p-8">
-      <div className="grid w-full max-w-4xl overflow-hidden rounded-3xl border bg-background shadow-xl md:grid-cols-[1.05fr_1fr]">
+    <main className="bg-muted/30 flex min-h-dvh items-center justify-center p-4 sm:p-8">
+      <div className="bg-background grid w-full max-w-4xl overflow-hidden rounded-3xl border shadow-xl md:grid-cols-[1.05fr_1fr]">
         <section className="hidden bg-slate-950 p-10 text-white md:flex md:flex-col md:justify-between">
           <div className="flex items-center">
             <BrandLogo
@@ -52,7 +58,7 @@ export function LoginScreen() {
               对话、知识库与工具，集中在一个安全工作台。
             </h1>
             <p className="mt-5 text-sm leading-6 text-slate-300">
-              支持多会话、模型切换、RAG、Trace、对象存储与细粒度 AI 权限。
+              支持多会话、模型切换、知识库检索、运行追踪、对象存储与细粒度智能权限。
             </p>
           </div>
         </section>
@@ -66,7 +72,7 @@ export function LoginScreen() {
               />
             </div>
           </div>
-          <div className="mb-6 flex rounded-xl bg-muted p-1">
+          <div className="bg-muted mb-6 flex rounded-xl p-1">
             {(["login", "register"] as const).map((item) => (
               <button
                 key={item}
@@ -80,7 +86,7 @@ export function LoginScreen() {
           <h2 className="text-2xl font-semibold">
             {mode === "login" ? "欢迎回来" : "创建账号"}
           </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="text-muted-foreground mt-1 text-sm">
             首个注册账号会自动获得管理员权限。
           </p>
           <form
@@ -118,7 +124,7 @@ export function LoginScreen() {
           </form>
           {accounts.length > 0 && (
             <div className="mt-8 border-t pt-5">
-              <p className="mb-3 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+              <p className="text-muted-foreground mb-3 text-xs font-medium tracking-wide uppercase">
                 已保存账号
               </p>
               <div className="space-y-2">
@@ -126,14 +132,14 @@ export function LoginScreen() {
                   <button
                     key={account.user.id}
                     onClick={() => switchAccount(account.user.id)}
-                    className="flex w-full items-center gap-3 rounded-xl border p-3 text-left hover:bg-muted/30"
+                    className="hover:bg-muted/30 flex w-full items-center gap-3 rounded-xl border p-3 text-left"
                   >
-                    <UserRound className="size-5 text-muted-foreground" />
+                    <UserRound className="text-muted-foreground size-5" />
                     <span className="min-w-0">
                       <span className="block truncate text-sm font-medium">
                         {account.user.display_name}
                       </span>
-                      <span className="block truncate text-xs text-muted-foreground">
+                      <span className="text-muted-foreground block truncate text-xs">
                         {account.user.email}
                       </span>
                     </span>

@@ -4,7 +4,7 @@ from app.auth.dependencies import get_current_user
 from app.auth.serializers import serialize_policy
 from app.cache.service import cache
 from app.core.config import get_settings
-from app.models.catalog import list_models
+from app.models.catalog import list_models, normalize_model_allowlist
 from app.tools.registry import tool_manifest
 from app.db.models import User
 from app.core.types import UserRole
@@ -16,8 +16,11 @@ settings = get_settings()
 
 @router.get("/models")
 def get_models(user: User = Depends(get_current_user)):
-    allowed = set(user.policy.allowed_models or [])
+    allowed_models = normalize_model_allowlist(user.policy.allowed_models)
+    allowed = set(allowed_models)
     models = [model.to_dict() for model in list_models() if model.id in allowed]
+    policy = serialize_policy(user.policy)
+    policy["allowed_models"] = allowed_models
     return {
         "current_model": (
             settings.zhipu_chat_model
@@ -25,7 +28,7 @@ def get_models(user: User = Depends(get_current_user)):
             else (models[0]["id"] if models else None)
         ),
         "models": models,
-        "policy": serialize_policy(user.policy),
+        "policy": policy,
     }
 
 

@@ -12,6 +12,7 @@ from app.core.config import get_settings
 from app.core.types import UserRole
 from app.db.models import Conversation, StoredFile, TraceSpan, User
 from app.db.session import get_db
+from app.models.catalog import LEGACY_MODEL_IDS, normalize_model_allowlist
 from app.schemas.auth import AdminPolicyUpdate, AdminUserUpdate
 from app.storage.service import storage
 
@@ -127,11 +128,19 @@ def update_policy(
         raise HTTPException(status_code=404, detail="用户不存在")
     values = request.model_dump(exclude_unset=True)
     if "allowed_models" in values:
-        invalid = set(values["allowed_models"]) - set(settings.available_chat_models)
+        requested_models = [
+            model.strip() for model in values["allowed_models"] if model.strip()
+        ]
+        invalid = (
+            set(requested_models)
+            - set(settings.available_chat_models)
+            - set(LEGACY_MODEL_IDS)
+        )
         if invalid:
             raise HTTPException(
                 status_code=400, detail=f"不支持的模型: {sorted(invalid)}"
             )
+        values["allowed_models"] = normalize_model_allowlist(requested_models)
     for key, value in values.items():
         setattr(user.policy, key, value)
     db.commit()

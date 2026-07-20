@@ -176,8 +176,9 @@ export function ThreadList({ threads, onThreadClick }: ThreadListProps) {
       setEditingThreadId(null);
       toast.success("会话名称已更新");
     } catch (error) {
+      console.error("重命名失败", error);
       toast.error("重命名失败", {
-        description: error instanceof Error ? error.message : String(error),
+        description: "请稍后重试。",
       });
     } finally {
       setSavingThreadId(null);
@@ -196,8 +197,9 @@ export function ThreadList({ threads, onThreadClick }: ThreadListProps) {
       }
       toast.success("会话已删除");
     } catch (error) {
+      console.error("删除会话失败", error);
       toast.error("删除失败", {
-        description: error instanceof Error ? error.message : String(error),
+        description: "请稍后重试。",
       });
     } finally {
       setDeletingThreadId(null);

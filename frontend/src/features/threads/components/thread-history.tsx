@@ -16,7 +16,6 @@ import {
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useThreads } from "@/providers/Thread";
 
-import { ThreadHistoryLoading } from "./thread-history-loading";
 import { ThreadList } from "./thread-list";
 
 export function ThreadHistory() {
@@ -27,8 +26,7 @@ export function ThreadHistory() {
     parseAsBoolean.withDefault(false),
   );
 
-  const { getThreads, threads, setThreads, threadsLoading, setThreadsLoading } =
-    useThreads();
+  const { getThreads, threads, setThreads, setThreadsLoading } = useThreads();
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -66,11 +64,7 @@ export function ThreadHistory() {
         >
           <MessageSquarePlus className="size-4" /> 新建会话
         </Button>
-        {threadsLoading ? (
-          <ThreadHistoryLoading />
-        ) : (
-          <ThreadList threads={threads} />
-        )}
+        <ThreadList threads={threads} />
       </div>
       <div className="lg:hidden">
         <Sheet

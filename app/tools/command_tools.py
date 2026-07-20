@@ -36,19 +36,19 @@ def run_command(command: str, cwd: str, timeout_seconds: int = 30) -> JsonObject
     if not settings.enable_command_tool:
         return {
             "status": "disabled",
-            "message": "Command tool is disabled. Set ENABLE_COMMAND_TOOL=true to enable it.",
+            "message": "命令执行工具未启用，请联系管理员开启。",
         }
 
     args = shlex.split(command)
     if not args:
-        return {"status": "error", "message": "empty command"}
+        return {"status": "error", "message": "命令不能为空"}
 
     if any(token in BLOCKED_TOKENS for token in args):
-        return {"status": "blocked", "message": f"blocked dangerous command: {command}"}
+        return {"status": "blocked", "message": f"命令包含高风险操作：{command}"}
 
     allowed = any(args[: len(prefix)] == prefix for prefix in ALLOWED_COMMAND_PREFIXES)
     if not allowed:
-        return {"status": "blocked", "message": f"command not in allowlist: {command}"}
+        return {"status": "blocked", "message": f"命令不在允许范围内：{command}"}
 
     safe_cwd: Path = safe_path(cwd)
     proc = subprocess.run(

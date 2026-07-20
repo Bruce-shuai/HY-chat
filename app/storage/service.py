@@ -92,7 +92,7 @@ class StorageService:
         size = path.stat().st_size
         if size > settings.max_upload_bytes:
             raise ValueError(
-                f"文件超过 {settings.max_upload_bytes // BYTES_PER_MEBIBYTE} MB 限制"
+                f"文件超过 {settings.max_upload_bytes // BYTES_PER_MEBIBYTE} 兆字节限制"
             )
         key = self.object_key(user_id, filename)
         mime = (

@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from app.db.models import User, UserPolicy
+from app.models.catalog import normalize_model_allowlist
 
 
 def serialize_policy(policy: UserPolicy) -> dict[str, object]:
     return {
-        "allowed_models": list(policy.allowed_models or []),
+        "allowed_models": normalize_model_allowlist(policy.allowed_models),
         "rpm_limit": policy.rpm_limit,
         "monthly_token_quota": policy.monthly_token_quota,
         "tokens_used": policy.tokens_used,

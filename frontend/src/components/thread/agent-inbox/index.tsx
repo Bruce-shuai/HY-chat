@@ -5,6 +5,7 @@ import { useStreamContext } from "@/providers/Stream";
 import { HITLRequest } from "./types";
 import { StateView } from "./components/state-view";
 import { ThreadActionsView } from "./components/thread-actions-view";
+import { prettifyText } from "./utils";
 
 interface ThreadViewProps {
   interrupt: Interrupt<HITLRequest> | Interrupt<HITLRequest>[];
@@ -37,7 +38,7 @@ export function ThreadView({ interrupt }: ThreadViewProps) {
     showDescriptionFlag: boolean,
   ) => {
     if (showStateFlag && showDescriptionFlag) {
-      console.error("Cannot show both state and description");
+      console.error("不能同时显示状态和说明");
       return;
     }
     if (showStateFlag) {
@@ -57,7 +58,7 @@ export function ThreadView({ interrupt }: ThreadViewProps) {
   }
 
   return (
-    <div className="flex h-full w-full flex-col rounded-2xl bg-muted/30 p-8 lg:flex-row">
+    <div className="bg-muted/30 flex h-full w-full flex-col rounded-2xl p-8 lg:flex-row">
       {showSidePanel ? (
         <StateView
           handleShowSidePanel={handleShowSidePanel}
@@ -70,9 +71,9 @@ export function ThreadView({ interrupt }: ThreadViewProps) {
           {interrupts.length > 1 && (
             <div className="flex flex-wrap items-center gap-2">
               {interrupts.map((it, idx) => {
-                const title =
-                  it.value?.action_requests?.[0]?.name ??
-                  `Interrupt ${idx + 1}`;
+                const title = it.value?.action_requests?.[0]?.name
+                  ? prettifyText(it.value.action_requests[0].name)
+                  : `中断 ${idx + 1}`;
                 return (
                   <button
                     key={it.id ?? idx}

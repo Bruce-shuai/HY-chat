@@ -9,6 +9,7 @@ from app.tools.builtin import (
     search_workspace_code,
 )
 from app.tools.external import get_stock_quote, get_weather, web_search
+from app.tools.image_tools import generate_image
 from app.tools.rag_tools import search_knowledge_base
 
 
@@ -20,6 +21,7 @@ def get_agent_tools() -> list[BaseTool]:
         read_workspace_file,
         search_workspace_code,
         search_knowledge_base,
+        generate_image,
         web_search,
         get_weather,
         get_stock_quote,

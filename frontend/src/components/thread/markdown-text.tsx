@@ -50,7 +50,7 @@ const CodeHeader: FC<CodeHeaderProps> = ({ language, code }) => {
     <div className="flex items-center justify-between gap-4 rounded-t-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white">
       <span className="lowercase [&>span]:text-xs">{language}</span>
       <TooltipIconButton
-        tooltip="Copy"
+        tooltip="复制"
         onClick={onCopy}
       >
         {!isCopied && <CopyIcon />}
@@ -124,6 +124,17 @@ const defaultComponents: any = {
         "text-primary font-medium underline underline-offset-4",
         className,
       )}
+      {...props}
+    />
+  ),
+  img: ({ className, alt, ...props }: { className?: string; alt?: string }) => (
+    <img
+      className={cn(
+        "bg-muted/20 my-4 max-h-[560px] max-w-full rounded-lg border object-contain shadow-sm",
+        className,
+      )}
+      alt={alt || "生成图片"}
+      loading="lazy"
       {...props}
     />
   ),

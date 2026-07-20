@@ -48,7 +48,7 @@ export function AccountMenu() {
           href="/traces"
           className="hover:bg-accent flex items-center gap-2 rounded-lg px-3 py-2 text-sm"
         >
-          <Activity className="size-4" /> Trace
+          <Activity className="size-4" /> 运行追踪
         </Link>
         <Link
           href="/files"

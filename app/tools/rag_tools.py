@@ -12,24 +12,24 @@ from app.policies.service import runtime_user_id
 def search_knowledge_base(
     query: str, runtime: ToolRuntime, top_k: int = 4
 ) -> dict[str, object]:
-    """在用户已经上传的 PDF、Word、PPT、Excel 等知识库文档中进行语义检索。"""
+    """在用户已经上传的知识库文档中进行语义检索。"""
 
     try:
         init_db()
         db = SessionLocal()
     except Exception as exc:
-        return {"error": f"Knowledge base is unavailable: {exc}"}
+        return {"error": f"知识库暂时不可用：{exc}"}
     try:
         user_id = runtime_user_id(runtime)
         if not user_id:
-            return {"error": "Authentication is required for knowledge-base search."}
+            return {"error": "知识库检索需要先登录。"}
         results = RagService(db, user_id=user_id).search(query=query, top_k=top_k)
         return {
             "query": query,
             "results": results,
-            "instruction": "回答时引用 filename 和页码/幻灯片等 metadata，不要编造来源。",
+            "instruction": "回答时引用文件名和页码、幻灯片等来源信息，不要编造来源。",
         }
     except Exception as exc:
-        return {"error": f"Knowledge base search failed: {exc}"}
+        return {"error": f"知识库检索失败：{exc}"}
     finally:
         db.close()

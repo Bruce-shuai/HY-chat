@@ -14,7 +14,7 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: "HY-chat",
-  description: "HY-chat AI assistant powered by LangChain and LangGraph",
+  description: "HY-chat 智能助手工作台",
   icons: {
     icon: "/hy-chat-logo.png",
     apple: "/hy-chat-logo.png",
@@ -27,7 +27,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="zh-CN" suppressHydrationWarning>
+    <html
+      lang="zh-CN"
+      suppressHydrationWarning
+    >
       <body className={inter.className}>
         <ThemeProvider
           attribute="class"

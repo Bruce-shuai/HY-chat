@@ -125,7 +125,7 @@ export function ThreadProvider({ children }: { children: ReactNode }) {
 
   const renameThread = useCallback(
     async (thread: Thread, title: string): Promise<Thread> => {
-      if (!apiUrl) throw new Error("LangGraph 服务地址未配置");
+      if (!apiUrl) throw new Error("图服务地址未配置");
       const nextTitle = title.trim();
       if (!nextTitle) throw new Error("会话名称不能为空");
 
@@ -163,7 +163,7 @@ export function ThreadProvider({ children }: { children: ReactNode }) {
 
   const deleteThread = useCallback(
     async (threadId: string): Promise<void> => {
-      if (!apiUrl) throw new Error("LangGraph 服务地址未配置");
+      if (!apiUrl) throw new Error("图服务地址未配置");
       await getClient().threads.delete(threadId);
 
       const response = await authFetch(
@@ -199,7 +199,7 @@ export function ThreadProvider({ children }: { children: ReactNode }) {
 export function useThreads() {
   const context = useContext(ThreadContext);
   if (context === undefined) {
-    throw new Error("useThreads must be used within a ThreadProvider");
+    throw new Error("请在会话提供器内使用会话列表上下文");
   }
   return context;
 }

@@ -33,7 +33,7 @@ function ContentCopyable({
     <TooltipIconButton
       onClick={(e) => handleCopy(e)}
       variant="ghost"
-      tooltip="Copy content"
+      tooltip="复制内容"
       disabled={disabled}
     >
       <AnimatePresence
@@ -135,15 +135,11 @@ export function CommandBar({
   isLoading: boolean;
 }) {
   if (isHumanMessage && isAiMessage) {
-    throw new Error(
-      "Can only set one of isHumanMessage or isAiMessage to true, not both.",
-    );
+    throw new Error("消息类型配置异常：不能同时作为用户消息和助手消息。");
   }
 
   if (!isHumanMessage && !isAiMessage) {
-    throw new Error(
-      "One of isHumanMessage or isAiMessage must be set to true.",
-    );
+    throw new Error("消息类型配置异常：必须指定用户消息或助手消息。");
   }
 
   if (
@@ -152,9 +148,7 @@ export function CommandBar({
       setIsEditing === undefined ||
       handleSubmitEdit === undefined)
   ) {
-    throw new Error(
-      "If isHumanMessage is true, all of isEditing, setIsEditing, and handleSubmitEdit must be set.",
-    );
+    throw new Error("用户消息编辑配置不完整。");
   }
 
   const showEdit =
@@ -168,7 +162,7 @@ export function CommandBar({
       <div className="flex items-center gap-2">
         <TooltipIconButton
           disabled={isLoading}
-          tooltip="Cancel edit"
+          tooltip="取消编辑"
           variant="ghost"
           onClick={() => {
             setIsEditing(false);
@@ -178,7 +172,7 @@ export function CommandBar({
         </TooltipIconButton>
         <TooltipIconButton
           disabled={isLoading}
-          tooltip="Submit"
+          tooltip="提交"
           variant="secondary"
           onClick={handleSubmitEdit}
         >
@@ -197,7 +191,7 @@ export function CommandBar({
       {isAiMessage && !!handleRegenerate && (
         <TooltipIconButton
           disabled={isLoading}
-          tooltip="Refresh"
+          tooltip="重新生成"
           variant="ghost"
           onClick={handleRegenerate}
         >
@@ -207,7 +201,7 @@ export function CommandBar({
       {showEdit && (
         <TooltipIconButton
           disabled={isLoading}
-          tooltip="Edit"
+          tooltip="编辑"
           variant="ghost"
           onClick={() => {
             setIsEditing?.(true);

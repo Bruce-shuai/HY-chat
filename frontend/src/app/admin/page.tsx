@@ -29,6 +29,7 @@ function AdminContent() {
   const [users, setUsers] = useState<AuthUser[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [message, setMessage] = useState("");
+  const [savingUserId, setSavingUserId] = useState<string | null>(null);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const backend =
     process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
@@ -59,42 +60,56 @@ function AdminContent() {
 
   const save = async (event: FormEvent<HTMLFormElement>, target: AuthUser) => {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    const userResponse = await authFetch(
-      `${backend}/admin/users/${target.id}`,
-      {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          role: form.get("role"),
-          is_active: form.get("is_active") === "on",
-        }),
-      },
-    );
-    const policyResponse = await authFetch(
-      `${backend}/admin/users/${target.id}/policy`,
-      {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          allowed_models: String(form.get("models") || "")
-            .split(",")
-            .map((item) => item.trim())
-            .filter(Boolean),
-          rpm_limit: Number(form.get("rpm")),
-          monthly_token_quota: Number(form.get("quota")),
-          allow_high_cost_tools: form.get("high_cost") === "on",
-        }),
-      },
-    );
-    if (!userResponse.ok || !policyResponse.ok) {
-      const error = !userResponse.ok
-        ? await userResponse.json()
-        : await policyResponse.json();
-      setMessage(error.detail || "保存失败");
-    } else {
-      setMessage("已保存");
-      load();
+    setSavingUserId(target.id);
+    setMessage("");
+    try {
+      const form = new FormData(event.currentTarget);
+      const userResponse = await authFetch(
+        `${backend}/admin/users/${target.id}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            role: form.get("role"),
+            is_active: form.get("is_active") === "on",
+          }),
+        },
+      );
+      const userResult = await userResponse.json().catch(() => null);
+      if (!userResponse.ok) {
+        setMessage(userResult?.detail || "账号信息保存失败");
+        return;
+      }
+
+      const policyResponse = await authFetch(
+        `${backend}/admin/users/${target.id}/policy`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            allowed_models: String(form.get("models") || "")
+              .split(",")
+              .map((item) => item.trim())
+              .filter(Boolean),
+            rpm_limit: Number(form.get("rpm")),
+            monthly_token_quota: Number(form.get("quota")),
+            allow_high_cost_tools: form.get("high_cost") === "on",
+          }),
+        },
+      );
+      const policyResult = await policyResponse.json().catch(() => null);
+      if (!policyResponse.ok) {
+        setMessage(policyResult?.detail || "智能权限保存失败");
+        return;
+      }
+
+      const saved = policyResult as AuthUser;
+      setUsers((current) =>
+        current.map((item) => (item.id === saved.id ? saved : item)),
+      );
+      setMessage(`已保存 ${saved.display_name} 的设置`);
+    } finally {
+      setSavingUserId(null);
     }
   };
 
@@ -160,7 +175,7 @@ function AdminContent() {
           ))}
         </section>
         <div className="mt-6 flex items-center justify-between">
-          <h2 className="text-lg font-semibold">账号与 AI 权限</h2>
+          <h2 className="text-lg font-semibold">账号与智能权限</h2>
           {message && (
             <span className="text-muted-foreground text-sm">{message}</span>
           )}
@@ -168,7 +183,15 @@ function AdminContent() {
         <section className="mt-3 space-y-3">
           {users.map((item) => (
             <form
-              key={item.id}
+              key={[
+                item.id,
+                item.role,
+                item.is_active,
+                item.policy.rpm_limit,
+                item.policy.monthly_token_quota,
+                item.policy.allow_high_cost_tools,
+                item.policy.allowed_models.join("|"),
+              ].join(":")}
               onSubmit={(event) => save(event, item)}
               className="bg-background rounded-2xl border p-4 sm:p-5"
             >
@@ -178,7 +201,7 @@ function AdminContent() {
                   <p className="text-muted-foreground text-xs">{item.email}</p>
                 </div>
                 <span className="bg-muted rounded-full px-2.5 py-1 text-xs">
-                  已用 {item.policy.tokens_used.toLocaleString()} tokens
+                  已用 {item.policy.tokens_used.toLocaleString()} 个标记
                 </span>
               </div>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -203,7 +226,7 @@ function AdminContent() {
                   />
                 </label>
                 <label className="text-muted-foreground text-xs">
-                  月 Token 配额
+                  月标记配额
                   <Input
                     name="quota"
                     type="number"
@@ -249,14 +272,21 @@ function AdminContent() {
                       type="button"
                       size="sm"
                       variant="destructive"
-                      disabled={deletingUserId === item.id}
+                      disabled={
+                        deletingUserId === item.id || savingUserId === item.id
+                      }
                       onClick={() => remove(item)}
                     >
                       <Trash2 className="size-4" />
                       {deletingUserId === item.id ? "删除中…" : "删除成员"}
                     </Button>
                   )}
-                  <Button size="sm">保存</Button>
+                  <Button
+                    size="sm"
+                    disabled={savingUserId === item.id}
+                  >
+                    {savingUserId === item.id ? "保存中…" : "保存"}
+                  </Button>
                 </div>
               </div>
             </form>

@@ -76,24 +76,45 @@ async def test_auth_roles_policy_and_token_revocation(tmp_path, monkeypatch):
                 f"/admin/users/{user_id}/policy",
                 headers={"Authorization": f"Bearer {admin_token}"},
                 json={
-                    "allowed_models": ["glm-4.5"],
+                    "allowed_models": ["glm-5.1"],
                     "rpm_limit": 5,
                     "monthly_token_quota": 100,
                 },
             )
             assert policy.status_code == 200
-            assert policy.json()["policy"]["allowed_models"] == ["glm-4.5"]
+            assert policy.json()["policy"]["allowed_models"] == ["glm-5.1"]
+
+            legacy_policy = await client.patch(
+                f"/admin/users/{user_id}/policy",
+                headers={"Authorization": f"Bearer {admin_token}"},
+                json={
+                    "allowed_models": ["glm-5.2", "glm-4-flash", "glm-4-plus"],
+                    "allow_high_cost_tools": True,
+                },
+            )
+            assert legacy_policy.status_code == 200
+            legacy_body = legacy_policy.json()["policy"]
+            assert legacy_body["allowed_models"] == [
+                "glm-5.2",
+                "glm-5.1",
+                "glm-5-turbo",
+            ]
+            assert legacy_body["allow_high_cost_tools"] is True
 
             models = await client.get(
                 "/models",
                 headers={"Authorization": f"Bearer {user_token}"},
             )
-            assert [item["id"] for item in models.json()["models"]] == ["glm-4.5"]
+            assert [item["id"] for item in models.json()["models"]] == [
+                "glm-5.2",
+                "glm-5.1",
+                "glm-5-turbo",
+            ]
 
             conversation = await client.post(
                 "/conversations",
                 headers={"Authorization": f"Bearer {user_token}"},
-                json={"title": "测试会话", "selected_model": "glm-4.5"},
+                json={"title": "测试会话", "selected_model": "glm-5.1"},
             )
             assert conversation.status_code == 201
             created_conversation = conversation.json()

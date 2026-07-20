@@ -13,6 +13,7 @@ import {
 } from "react";
 import { Decision, DecisionWithEdits, HITLRequest, SubmitType } from "../types";
 import { buildDecisionFromState, createDefaultHumanResponse } from "../utils";
+import { isAlreadyConsumedInterruptError } from "@/lib/stream-errors";
 
 interface UseInterruptedActionsInput {
   interrupt: Interrupt<HITLRequest>;
@@ -21,6 +22,7 @@ interface UseInterruptedActionsInput {
 interface UseInterruptedActionsValue {
   handleSubmit: (
     e: React.MouseEvent<HTMLButtonElement, MouseEvent> | KeyboardEvent,
+    submitTypeOverride?: SubmitType,
   ) => Promise<void>;
   handleResolve: (
     e: React.MouseEvent<HTMLButtonElement, MouseEvent>,
@@ -54,10 +56,12 @@ export default function useInterruptedActions({
   const [hasAddedResponse, setHasAddedResponse] = useState(false);
   const [approveAllowed, setApproveAllowed] = useState(false);
   const initialHumanInterruptEditValue = useRef<Record<string, string>>({});
+  const submittingRef = useRef(false);
 
   useEffect(() => {
     const hitlValue = interrupt.value as HITLRequest | undefined;
     initialHumanInterruptEditValue.current = {};
+    submittingRef.current = false;
 
     if (!hitlValue) {
       setHumanResponse([]);
@@ -84,28 +88,40 @@ export default function useInterruptedActions({
     }
   }, [interrupt]);
 
-  const resumeRun = async (decisions: Decision[]): Promise<boolean> => {
+  const resumeRun = async (
+    decisions: Decision[],
+  ): Promise<"success" | "already-consumed" | "error"> => {
     try {
       await thread.respond({ decisions });
-      return true;
+      return "success";
     } catch (error) {
+      if (isAlreadyConsumedInterruptError(error)) {
+        return "already-consumed";
+      }
+
       console.error("Error sending human response", error);
-      return false;
+      return "error";
     }
   };
 
   const handleSubmit = async (
     e: React.MouseEvent<HTMLButtonElement, MouseEvent> | KeyboardEvent,
+    submitTypeOverride?: SubmitType,
   ) => {
     e.preventDefault();
+
+    if (submittingRef.current) {
+      return;
+    }
+
     const { decision, error } = buildDecisionFromState(
       humanResponse,
-      selectedSubmitType,
+      submitTypeOverride ?? selectedSubmitType,
     );
 
     if (!decision) {
-      toast.error("Error", {
-        description: error ?? "Unsupported response type.",
+      toast.error("错误", {
+        description: error ?? "暂不支持这种处理方式。",
         duration: 5000,
         richColors: true,
         closeButton: true,
@@ -114,7 +130,7 @@ export default function useInterruptedActions({
     }
 
     if (error) {
-      toast.error("Error", {
+      toast.error("错误", {
         description: error,
         duration: 5000,
         richColors: true,
@@ -125,19 +141,29 @@ export default function useInterruptedActions({
 
     let errorOccurred = false;
     initialHumanInterruptEditValue.current = {};
+    submittingRef.current = true;
 
     try {
       setLoading(true);
       setStreaming(true);
 
-      const resumedSuccessfully = await resumeRun([decision]);
-      if (!resumedSuccessfully) {
+      const resumeStatus = await resumeRun([decision]);
+      if (resumeStatus === "already-consumed") {
+        toast("已处理", {
+          description: "这个工具调用已经被处理，正在同步最新状态。",
+          duration: 3000,
+        });
+        setStreamFinished(true);
+        return;
+      }
+
+      if (resumeStatus === "error") {
         errorOccurred = true;
         return;
       }
 
-      toast("Success", {
-        description: "Response submitted successfully.",
+      toast("成功", {
+        description: "处理结果已提交。",
         duration: 5000,
       });
 
@@ -147,16 +173,15 @@ export default function useInterruptedActions({
       errorOccurred = true;
 
       if ("message" in error && error.message.includes("Invalid assistant")) {
-        toast("Error: Invalid assistant ID", {
-          description:
-            "The provided assistant ID was not found in this graph. Please update the assistant ID in the settings and try again.",
+        toast("错误：助手标识无效", {
+          description: "当前图中找不到这个助手标识。请在设置中更新后重试。",
           richColors: true,
           closeButton: true,
           duration: 5000,
         });
       } else {
-        toast.error("Error", {
-          description: "Failed to submit response.",
+        toast.error("错误", {
+          description: "提交处理结果失败。",
           richColors: true,
           closeButton: true,
           duration: 5000,
@@ -165,6 +190,7 @@ export default function useInterruptedActions({
     } finally {
       setStreaming(false);
       setLoading(false);
+      submittingRef.current = false;
       if (errorOccurred) {
         setStreamFinished(false);
       }
@@ -181,14 +207,14 @@ export default function useInterruptedActions({
     try {
       await thread.respond(null, { goto: END });
 
-      toast("Success", {
-        description: "Marked thread as resolved.",
+      toast("成功", {
+        description: "已标记为已解决。",
         duration: 3000,
       });
     } catch (error) {
       console.error("Error marking thread as resolved", error);
-      toast.error("Error", {
-        description: "Failed to mark thread as resolved.",
+      toast.error("错误", {
+        description: "标记为已解决失败。",
         richColors: true,
         closeButton: true,
         duration: 3000,

@@ -1,5 +1,5 @@
 import { ToolCall } from "@langchain/core/messages/tool";
-import { unknownToPrettyDate } from "../utils";
+import { prettifyText, unknownToPrettyDate } from "../utils";
 
 export function ToolCallTable({ toolCall }: { toolCall: ToolCall }) {
   return (
@@ -11,7 +11,7 @@ export function ToolCallTable({ toolCall }: { toolCall: ToolCall }) {
               className="bg-muted px-2 py-0 text-left text-sm"
               colSpan={2}
             >
-              {toolCall.name}
+              {prettifyText(toolCall.name)}
             </th>
           </tr>
         </thead>
@@ -39,7 +39,9 @@ export function ToolCallTable({ toolCall }: { toolCall: ToolCall }) {
                 key={key}
                 className="border-t"
               >
-                <td className="w-1/3 px-2 py-1 text-xs font-medium">{key}</td>
+                <td className="w-1/3 px-2 py-1 text-xs font-medium">
+                  {prettifyText(key)}
+                </td>
                 <td className="px-2 py-1 font-mono text-xs">{valueStr}</td>
               </tr>
             );

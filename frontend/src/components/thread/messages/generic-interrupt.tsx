@@ -19,7 +19,7 @@ function isUrl(value: any): boolean {
 function renderInterruptStateItem(value: any): React.ReactNode {
   if (isComplexValue(value)) {
     return (
-      <code className="rounded bg-muted/30 px-2 py-1 font-mono text-sm">
+      <code className="bg-muted/30 rounded px-2 py-1 font-mono text-sm">
         {JSON.stringify(value, null, 2)}
       </code>
     );
@@ -68,7 +68,7 @@ export function GenericInterruptView({
       const strValue = JSON.stringify(value, null, 2);
       if (strValue.length > 100) {
         // Return plain text for truncated content instead of a JSON object
-        return `Truncated ${strValue.length} characters...`;
+        return `已截断 ${strValue.length} 个字符...`;
       }
     }
 
@@ -92,14 +92,14 @@ export function GenericInterruptView({
   const displayEntries = processEntries();
 
   return (
-    <div className="overflow-hidden rounded-lg border border-border">
-      <div className="border-b border-border bg-muted/30 px-4 py-2">
+    <div className="border-border overflow-hidden rounded-lg border">
+      <div className="border-border bg-muted/30 border-b px-4 py-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h3 className="font-medium text-foreground">Human Interrupt</h3>
+          <h3 className="text-foreground font-medium">人工确认请求</h3>
         </div>
       </div>
       <motion.div
-        className="min-w-full bg-muted"
+        className="bg-muted min-w-full"
         initial={false}
         animate={{ height: "auto" }}
         transition={{ duration: 0.3 }}
@@ -128,10 +128,10 @@ export function GenericInterruptView({
                       : (item as [string, any]);
                     return (
                       <tr key={argIdx}>
-                        <td className="px-4 py-2 text-sm font-medium whitespace-nowrap text-foreground">
+                        <td className="text-foreground px-4 py-2 text-sm font-medium whitespace-nowrap">
                           {key}
                         </td>
-                        <td className="px-4 py-2 text-sm text-muted-foreground">
+                        <td className="text-muted-foreground px-4 py-2 text-sm">
                           {renderInterruptStateItem(value)}
                         </td>
                       </tr>
@@ -146,7 +146,7 @@ export function GenericInterruptView({
           (Array.isArray(interrupt) && interrupt.length > 5)) && (
           <motion.button
             onClick={() => setIsExpanded(!isExpanded)}
-            className="flex w-full cursor-pointer items-center justify-center border-t-[1px] border-border py-2 text-muted-foreground transition-all duration-200 ease-in-out hover:bg-muted/30 hover:text-muted-foreground"
+            className="border-border text-muted-foreground hover:bg-muted/30 hover:text-muted-foreground flex w-full cursor-pointer items-center justify-center border-t-[1px] py-2 transition-all duration-200 ease-in-out"
             initial={{ scale: 1 }}
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}

@@ -1,3 +1,4 @@
+from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -51,6 +52,24 @@ def test_workspace_tools_are_admin_only_in_policy_middleware(tool_name):
 
     admin = SimpleNamespace(is_active=True, role=UserRole.ADMIN)
     enforce_tool(FakeSession(admin), "admin-id", tool_name)
+
+
+def test_high_cost_tool_policy_error_is_explicit():
+    policy = SimpleNamespace(
+        quota_reset_at=datetime(2026, 8, 1),
+        tokens_used=0,
+        allow_high_cost_tools=False,
+    )
+    regular_user = SimpleNamespace(
+        is_active=True,
+        role=UserRole.USER,
+        policy=policy,
+    )
+
+    enforce_tool(FakeSession(regular_user), "user-id", "web_search")
+
+    with pytest.raises(PolicyViolation, match="高成本工具权限拦截"):
+        enforce_tool(FakeSession(regular_user), "user-id", "get_stock_quote")
 
 
 @pytest.mark.parametrize(

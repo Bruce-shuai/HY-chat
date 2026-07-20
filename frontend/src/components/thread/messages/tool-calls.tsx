@@ -2,20 +2,42 @@ import { AIMessage, ToolMessage } from "@langchain/core/messages";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronDown, ChevronUp } from "lucide-react";
+import { prettifyText } from "../agent-inbox/utils";
 
 function isComplexValue(value: any): boolean {
   return Array.isArray(value) || (typeof value === "object" && value !== null);
 }
 
+function formatToolValue(key: string, value: any): string {
+  const normalizedKey = key
+    .trim()
+    .replace(/[\s-]+/g, "_")
+    .toLowerCase();
+
+  if (normalizedKey === "max_results" && typeof value !== "object") {
+    return `${value} 条`;
+  }
+
+  return String(value);
+}
+
 export function ToolCalls({
   toolCalls,
+  waitingForApproval = false,
 }: {
   toolCalls: AIMessage["tool_calls"];
+  waitingForApproval?: boolean;
 }) {
   if (!toolCalls || toolCalls.length === 0) return null;
 
   return (
     <div className="mx-auto grid max-w-3xl grid-rows-[1fr_auto] gap-2">
+      {waitingForApproval && (
+        <p className="text-muted-foreground bg-muted/30 rounded-lg border px-3 py-2 text-sm">
+          这个工具调用正在等待人工确认。请在上方审批面板点击“批准”，HY-chat
+          才会执行工具并继续回答。
+        </p>
+      )}
       {toolCalls.map((tc, idx) => {
         const args = tc.args as Record<string, any>;
         const hasArgs = Object.keys(args).length > 0;
@@ -26,11 +48,14 @@ export function ToolCalls({
           >
             <div className="border-border bg-muted/30 border-b px-4 py-2">
               <h3 className="text-foreground font-medium">
-                {tc.name}
+                {prettifyText(tc.name)}
                 {tc.id && (
-                  <code className="bg-muted ml-2 rounded px-2 py-1 text-sm">
-                    {tc.id}
-                  </code>
+                  <span className="text-muted-foreground ml-2 inline-flex items-center gap-1 text-xs font-normal">
+                    调用编号：
+                    <code className="bg-muted rounded px-2 py-1 text-sm">
+                      {tc.id}
+                    </code>
+                  </span>
                 )}
               </h3>
             </div>
@@ -40,7 +65,7 @@ export function ToolCalls({
                   {Object.entries(args).map(([key, value], argIdx) => (
                     <tr key={argIdx}>
                       <td className="text-foreground px-4 py-2 text-sm font-medium whitespace-nowrap">
-                        {key}
+                        {prettifyText(key)}
                       </td>
                       <td className="text-muted-foreground px-4 py-2 text-sm">
                         {isComplexValue(value) ? (
@@ -48,7 +73,7 @@ export function ToolCalls({
                             {JSON.stringify(value, null, 2)}
                           </code>
                         ) : (
-                          String(value)
+                          formatToolValue(key, value)
                         )}
                       </td>
                     </tr>
@@ -69,18 +94,18 @@ export function ToolResult({ message }: { message: ToolMessage }) {
   const [isExpanded, setIsExpanded] = useState(false);
 
   let parsedContent: any;
-  let isJsonContent = false;
 
   try {
     if (typeof message.content === "string") {
       parsedContent = JSON.parse(message.content);
-      isJsonContent = isComplexValue(parsedContent);
+    } else {
+      parsedContent = message.content;
     }
   } catch {
-    // Content is not JSON, use as is
     parsedContent = message.content;
   }
 
+  const isJsonContent = isComplexValue(parsedContent);
   const contentStr = isJsonContent
     ? JSON.stringify(parsedContent, null, 2)
     : String(message.content);
@@ -100,18 +125,21 @@ export function ToolResult({ message }: { message: ToolMessage }) {
           <div className="flex flex-wrap items-center justify-between gap-2">
             {message.name ? (
               <h3 className="text-foreground font-medium">
-                Tool Result:{" "}
+                工具结果：{" "}
                 <code className="bg-muted rounded px-2 py-1">
-                  {message.name}
+                  {prettifyText(message.name)}
                 </code>
               </h3>
             ) : (
-              <h3 className="text-foreground font-medium">Tool Result</h3>
+              <h3 className="text-foreground font-medium">工具结果</h3>
             )}
             {message.tool_call_id && (
-              <code className="bg-muted ml-2 rounded px-2 py-1 text-sm">
-                {message.tool_call_id}
-              </code>
+              <span className="text-muted-foreground inline-flex items-center gap-1 text-xs">
+                调用编号：
+                <code className="bg-muted rounded px-2 py-1 text-sm">
+                  {message.tool_call_id}
+                </code>
+              </span>
             )}
           </div>
         </div>
@@ -148,7 +176,7 @@ export function ToolResult({ message }: { message: ToolMessage }) {
                         return (
                           <tr key={argIdx}>
                             <td className="text-foreground px-4 py-2 text-sm font-medium whitespace-nowrap">
-                              {key}
+                              {prettifyText(String(key))}
                             </td>
                             <td className="text-muted-foreground px-4 py-2 text-sm">
                               {isComplexValue(value) ? (
@@ -156,7 +184,7 @@ export function ToolResult({ message }: { message: ToolMessage }) {
                                   {JSON.stringify(value, null, 2)}
                                 </code>
                               ) : (
-                                String(value)
+                                formatToolValue(String(key), value)
                               )}
                             </td>
                           </tr>

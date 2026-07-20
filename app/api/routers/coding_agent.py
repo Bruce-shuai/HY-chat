@@ -133,7 +133,7 @@ def get_coding_agent_run(
 ) -> AgentRunDetail:
     run = db.get(AgentRun, run_id)
     if not run or (run.user_id != user.id and user.role != UserRole.ADMIN):
-        raise HTTPException(status_code=404, detail="Coding Agent 运行记录不存在")
+        raise HTTPException(status_code=404, detail="代码智能体运行记录不存在")
     tools = db.scalars(
         select(ToolCall).where(ToolCall.run_id == run_id).order_by(ToolCall.id.asc())
     ).all()

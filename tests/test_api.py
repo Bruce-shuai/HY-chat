@@ -3,6 +3,7 @@ from types import SimpleNamespace
 
 import httpx
 import pytest
+from langchain.messages import ToolMessage
 
 import app.agents.chat as agent_chat_module
 import app.api.routers.chat as chat_module
@@ -31,7 +32,7 @@ async def test_system_endpoints_and_sse(monkeypatch):
         chat_module, "authorize_model_access", lambda *_args, **_kwargs: None
     )
     policy = SimpleNamespace(
-        allowed_models=chat_module.settings.available_chat_models,
+        allowed_models=["glm-5.2", "glm-4-flash", "glm-4-plus", "glm-4.5"],
         rpm_limit=30,
         monthly_token_quota=1000,
         tokens_used=0,
@@ -48,11 +49,22 @@ async def test_system_endpoints_and_sse(monkeypatch):
         ) as client:
             models = await client.get("/models")
             assert models.status_code == 200
-            assert models.json()["current_model"]
+            model_payload = models.json()
+            assert model_payload["current_model"] == "glm-5.2"
+            assert [item["id"] for item in model_payload["models"]] == [
+                "glm-5.2",
+                "glm-5.1",
+                "glm-5-turbo",
+            ]
+            assert model_payload["policy"]["allowed_models"] == [
+                "glm-5.2",
+                "glm-5.1",
+                "glm-5-turbo",
+            ]
 
             tools = await client.get("/tools")
             assert tools.status_code == 200
-            assert len(tools.json()["tools"]) == 7
+            assert len(tools.json()["tools"]) == 8
 
             formats = await client.get("/rag/formats")
             assert ".pdf" in formats.json()["extensions"]
@@ -64,6 +76,47 @@ async def test_system_endpoints_and_sse(monkeypatch):
             assert response.status_code == 200
             assert response.headers["content-type"].startswith("text/event-stream")
             assert "event: token" in response.text
+            assert "event: done" in response.text
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_sse_returns_failure_text_when_tool_error_has_no_model_text(
+    monkeypatch,
+):
+    class ToolErrorOnlyGraph:
+        async def astream(self, *_args, **_kwargs):
+            yield ToolMessage(
+                content='{"error":"未找到股票行情：SPY"}',
+                tool_call_id="call-1",
+                name="get_stock_quote",
+            )
+
+    user = SimpleNamespace(id="test-user")
+    app.dependency_overrides[get_current_user] = lambda: user
+    app.dependency_overrides[get_db] = lambda: SimpleNamespace()
+    monkeypatch.setattr(chat_module, "graph", ToolErrorOnlyGraph())
+    monkeypatch.setattr(
+        chat_module, "authorize_model_access", lambda *_args, **_kwargs: None
+    )
+    monkeypatch.setattr(chat_module.cache, "get_json", lambda _key: None)
+    monkeypatch.setattr(chat_module.cache, "set_json", lambda *_args, **_kwargs: None)
+
+    transport = httpx.ASGITransport(app=app)
+    try:
+        async with httpx.AsyncClient(
+            transport=transport, base_url="http://test"
+        ) as client:
+            response = await client.post(
+                "/chat/stream",
+                json={"message": "标普500当前价格", "use_cache": False},
+            )
+
+            assert response.status_code == 200
+            assert "event: token" in response.text
+            assert "查询失败" in response.text
+            assert "未找到股票行情：SPY" in response.text
             assert "event: done" in response.text
     finally:
         app.dependency_overrides.clear()

@@ -75,7 +75,7 @@ class CodingAgentNodes:
             {
                 "role": ChatRole.SYSTEM,
                 "content": (
-                    "你是 HY-chat，一个具备代码分析能力的 AI 聊天助手。"
+                    "你是 HY-chat，一个具备代码分析能力的智能聊天助手。"
                     "你需要先基于真实文件和搜索结果生成执行计划。"
                     "不要编造没读取过的文件内容。输出中文，结构清晰。"
                 ),
@@ -100,8 +100,8 @@ class CodingAgentNodes:
             {
                 "role": ChatRole.SYSTEM,
                 "content": (
-                    "你是一个严谨的 AI 应用工程师，负责给用户总结本次 "
-                    "Coding Agent 执行结果。"
+                    "你是一个严谨的智能应用工程师，负责给用户总结本次 "
+                    "代码智能体执行结果。"
                 ),
             },
             {

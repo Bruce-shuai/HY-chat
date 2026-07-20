@@ -29,11 +29,22 @@ const BYTES_PER_KIBIBYTE = 1024;
 const BYTES_PER_MEBIBYTE = BYTES_PER_KIBIBYTE * BYTES_PER_KIBIBYTE;
 
 function formatSize(bytes: number) {
-  if (bytes < BYTES_PER_KIBIBYTE) return `${bytes} B`;
+  if (bytes < BYTES_PER_KIBIBYTE) return `${bytes} 字节`;
   if (bytes < BYTES_PER_MEBIBYTE) {
-    return `${(bytes / BYTES_PER_KIBIBYTE).toFixed(1)} KB`;
+    return `${(bytes / BYTES_PER_KIBIBYTE).toFixed(1)} 千字节`;
   }
-  return `${(bytes / BYTES_PER_MEBIBYTE).toFixed(1)} MB`;
+  return `${(bytes / BYTES_PER_MEBIBYTE).toFixed(1)} 兆字节`;
+}
+
+function formatStorageBackend(value: string) {
+  const normalized = value.toLowerCase();
+  if (normalized.includes("s3") || normalized.includes("object")) {
+    return "对象存储";
+  }
+  if (normalized.includes("local")) {
+    return "本地存储";
+  }
+  return "存储服务";
 }
 
 function FilesContent() {
@@ -83,12 +94,12 @@ function FilesContent() {
   };
 
   return (
-    <main className="min-h-dvh bg-muted/30">
-      <header className="sticky top-0 z-20 border-b bg-background/90 backdrop-blur">
+    <main className="bg-muted/30 min-h-dvh">
+      <header className="bg-background/90 sticky top-0 z-20 border-b backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3 sm:px-6">
           <Link
             href="/"
-            className="rounded-lg p-2 hover:bg-muted"
+            className="hover:bg-muted rounded-lg p-2"
           >
             <ArrowLeft className="size-5" />
           </Link>
@@ -98,11 +109,11 @@ function FilesContent() {
         </div>
       </header>
       <div className="mx-auto max-w-6xl p-4 sm:p-6">
-        <section className="mb-5 flex flex-col justify-between gap-3 rounded-2xl border bg-background p-5 sm:flex-row sm:items-center">
+        <section className="bg-background mb-5 flex flex-col justify-between gap-3 rounded-2xl border p-5 sm:flex-row sm:items-center">
           <div>
             <h2 className="font-semibold">图片与文件</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              文件按账号隔离，可使用本地卷或 S3 兼容对象存储。
+            <p className="text-muted-foreground mt-1 text-sm">
+              文件按账号隔离，可使用本地卷或兼容对象存储。
             </p>
           </div>
           <Button
@@ -120,9 +131,9 @@ function FilesContent() {
             onChange={upload}
           />
         </section>
-        <section className="overflow-hidden rounded-2xl border bg-background">
+        <section className="bg-background overflow-hidden rounded-2xl border">
           {files.length === 0 ? (
-            <p className="p-10 text-center text-sm text-muted-foreground">
+            <p className="text-muted-foreground p-10 text-center text-sm">
               还没有文件。
             </p>
           ) : (
@@ -132,21 +143,22 @@ function FilesContent() {
                   key={item.id}
                   className="flex items-center gap-3 p-4"
                 >
-                  <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted">
+                  <span className="bg-muted flex size-10 shrink-0 items-center justify-center rounded-xl">
                     <File className="size-5" />
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">
                       {item.filename}
                     </p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {formatSize(item.size_bytes)} · {item.storage_backend} ·{" "}
+                    <p className="text-muted-foreground mt-1 text-xs">
+                      {formatSize(item.size_bytes)} ·{" "}
+                      {formatStorageBackend(item.storage_backend)} ·{" "}
                       {new Date(item.created_at).toLocaleString()}
                     </p>
                   </div>
                   <button
                     onClick={() => download(item)}
-                    className="rounded-lg p-2 hover:bg-muted"
+                    className="hover:bg-muted rounded-lg p-2"
                     title="下载"
                   >
                     <Download className="size-4" />

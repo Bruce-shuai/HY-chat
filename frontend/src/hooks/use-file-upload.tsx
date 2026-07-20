@@ -1,81 +1,94 @@
-import { useState, useRef, useEffect, ChangeEvent } from "react";
+import { useState, useRef, useEffect, ChangeEvent, useCallback } from "react";
 import { toast } from "sonner";
-import { ContentBlock } from "@langchain/core/messages";
-import { fileToContentBlock } from "@/lib/multimodal-utils";
-
-export const SUPPORTED_FILE_TYPES = [
-  "image/jpeg",
-  "image/png",
-  "image/gif",
-  "image/webp",
-  "application/pdf",
-];
+import {
+  ChatContentBlock,
+  fileToContentBlock,
+  isSupportedTextFile,
+  isSupportedUploadFile,
+  isTextContentBlock,
+} from "@/lib/multimodal-utils";
 
 interface UseFileUploadOptions {
-  initialBlocks?: ContentBlock.Multimodal.Data[];
+  initialBlocks?: ChatContentBlock[];
+}
+
+function isDuplicateFile(file: File, blocks: ChatContentBlock[]) {
+  if (file.type === "application/pdf") {
+    return blocks.some(
+      (block) =>
+        block.type === "file" &&
+        block.mimeType === "application/pdf" &&
+        block.metadata?.filename === file.name,
+    );
+  }
+  if (isSupportedTextFile(file)) {
+    return blocks.some(
+      (block) =>
+        isTextContentBlock(block) &&
+        (block.metadata?.filename === file.name ||
+          block.metadata?.name === file.name),
+    );
+  }
+  if (isSupportedUploadFile(file)) {
+    return blocks.some(
+      (block) =>
+        block.type === "image" &&
+        block.metadata?.name === file.name &&
+        block.mimeType === file.type,
+    );
+  }
+  return false;
+}
+
+function classifyFiles(files: File[], blocks: ChatContentBlock[]) {
+  const validFiles = files.filter(isSupportedUploadFile);
+  return {
+    invalidFiles: files.filter((file) => !isSupportedUploadFile(file)),
+    duplicateFiles: validFiles.filter((file) => isDuplicateFile(file, blocks)),
+    uniqueFiles: validFiles.filter((file) => !isDuplicateFile(file, blocks)),
+  };
 }
 
 export function useFileUpload({
   initialBlocks = [],
 }: UseFileUploadOptions = {}) {
   const [contentBlocks, setContentBlocks] =
-    useState<ContentBlock.Multimodal.Data[]>(initialBlocks);
+    useState<ChatContentBlock[]>(initialBlocks);
   const dropRef = useRef<HTMLDivElement>(null);
   const [dragOver, setDragOver] = useState(false);
   const dragCounter = useRef(0);
 
-  const isDuplicate = (file: File, blocks: ContentBlock.Multimodal.Data[]) => {
-    if (file.type === "application/pdf") {
-      return blocks.some(
-        (b) =>
-          b.type === "file" &&
-          b.mimeType === "application/pdf" &&
-          b.metadata?.filename === file.name,
+  const addFiles = useCallback(
+    async (files: File[], invalidFileMessage: string) => {
+      if (!files.length) return;
+      const { invalidFiles, duplicateFiles, uniqueFiles } = classifyFiles(
+        files,
+        contentBlocks,
       );
-    }
-    if (SUPPORTED_FILE_TYPES.includes(file.type)) {
-      return blocks.some(
-        (b) =>
-          b.type === "image" &&
-          b.metadata?.name === file.name &&
-          b.mimeType === file.type,
-      );
-    }
-    return false;
-  };
+
+      if (invalidFiles.length > 0) {
+        toast.error(invalidFileMessage);
+      }
+      if (duplicateFiles.length > 0) {
+        toast.error(
+          `检测到重复文件：${duplicateFiles.map((f) => f.name).join(", ")}。同一条消息里每个文件只能上传一次。`,
+        );
+      }
+      if (uniqueFiles.length > 0) {
+        const newBlocks = await Promise.all(
+          uniqueFiles.map(fileToContentBlock),
+        );
+        setContentBlocks((prev) => [...prev, ...newBlocks]);
+      }
+    },
+    [contentBlocks],
+  );
 
   const handleFileUpload = async (e: ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files) return;
-    const fileArray = Array.from(files);
-    const validFiles = fileArray.filter((file) =>
-      SUPPORTED_FILE_TYPES.includes(file.type),
+    await addFiles(
+      Array.from(e.target.files ?? []),
+      "文件类型不支持。请上传图片、PDF 或代码/文本文件。",
     );
-    const invalidFiles = fileArray.filter(
-      (file) => !SUPPORTED_FILE_TYPES.includes(file.type),
-    );
-    const duplicateFiles = validFiles.filter((file) =>
-      isDuplicate(file, contentBlocks),
-    );
-    const uniqueFiles = validFiles.filter(
-      (file) => !isDuplicate(file, contentBlocks),
-    );
-
-    if (invalidFiles.length > 0) {
-      toast.error(
-        "You have uploaded invalid file type. Please upload a JPEG, PNG, GIF, WEBP image or a PDF.",
-      );
-    }
-    if (duplicateFiles.length > 0) {
-      toast.error(
-        `Duplicate file(s) detected: ${duplicateFiles.map((f) => f.name).join(", ")}. Each file can only be uploaded once per message.`,
-      );
-    }
-
-    const newBlocks = uniqueFiles.length
-      ? await Promise.all(uniqueFiles.map(fileToContentBlock))
-      : [];
-    setContentBlocks((prev) => [...prev, ...newBlocks]);
     e.target.value = "";
   };
 
@@ -107,35 +120,10 @@ export function useFileUpload({
 
       if (!e.dataTransfer) return;
 
-      const files = Array.from(e.dataTransfer.files);
-      const validFiles = files.filter((file) =>
-        SUPPORTED_FILE_TYPES.includes(file.type),
+      await addFiles(
+        Array.from(e.dataTransfer.files),
+        "文件类型不支持。请上传图片、PDF 或代码/文本文件。",
       );
-      const invalidFiles = files.filter(
-        (file) => !SUPPORTED_FILE_TYPES.includes(file.type),
-      );
-      const duplicateFiles = validFiles.filter((file) =>
-        isDuplicate(file, contentBlocks),
-      );
-      const uniqueFiles = validFiles.filter(
-        (file) => !isDuplicate(file, contentBlocks),
-      );
-
-      if (invalidFiles.length > 0) {
-        toast.error(
-          "You have uploaded invalid file type. Please upload a JPEG, PNG, GIF, WEBP image or a PDF.",
-        );
-      }
-      if (duplicateFiles.length > 0) {
-        toast.error(
-          `Duplicate file(s) detected: ${duplicateFiles.map((f) => f.name).join(", ")}. Each file can only be uploaded once per message.`,
-        );
-      }
-
-      const newBlocks = uniqueFiles.length
-        ? await Promise.all(uniqueFiles.map(fileToContentBlock))
-        : [];
-      setContentBlocks((prev) => [...prev, ...newBlocks]);
     };
     const handleWindowDragEnd = (e: DragEvent) => {
       dragCounter.current = 0;
@@ -185,7 +173,7 @@ export function useFileUpload({
       window.removeEventListener("dragover", handleWindowDragOver);
       dragCounter.current = 0;
     };
-  }, [contentBlocks]);
+  }, [addFiles]);
 
   const removeBlock = (idx: number) => {
     setContentBlocks((prev) => prev.filter((_, i) => i !== idx));
@@ -214,47 +202,10 @@ export function useFileUpload({
       return;
     }
     e.preventDefault();
-    const validFiles = files.filter((file) =>
-      SUPPORTED_FILE_TYPES.includes(file.type),
+    await addFiles(
+      files,
+      "粘贴的文件类型不支持。请粘贴图片、PDF 或代码/文本文件。",
     );
-    const invalidFiles = files.filter(
-      (file) => !SUPPORTED_FILE_TYPES.includes(file.type),
-    );
-    const isDuplicate = (file: File) => {
-      if (file.type === "application/pdf") {
-        return contentBlocks.some(
-          (b) =>
-            b.type === "file" &&
-            b.mimeType === "application/pdf" &&
-            b.metadata?.filename === file.name,
-        );
-      }
-      if (SUPPORTED_FILE_TYPES.includes(file.type)) {
-        return contentBlocks.some(
-          (b) =>
-            b.type === "image" &&
-            b.metadata?.name === file.name &&
-            b.mimeType === file.type,
-        );
-      }
-      return false;
-    };
-    const duplicateFiles = validFiles.filter(isDuplicate);
-    const uniqueFiles = validFiles.filter((file) => !isDuplicate(file));
-    if (invalidFiles.length > 0) {
-      toast.error(
-        "You have pasted an invalid file type. Please paste a JPEG, PNG, GIF, WEBP image or a PDF.",
-      );
-    }
-    if (duplicateFiles.length > 0) {
-      toast.error(
-        `Duplicate file(s) detected: ${duplicateFiles.map((f) => f.name).join(", ")}. Each file can only be uploaded once per message.`,
-      );
-    }
-    if (uniqueFiles.length > 0) {
-      const newBlocks = await Promise.all(uniqueFiles.map(fileToContentBlock));
-      setContentBlocks((prev) => [...prev, ...newBlocks]);
-    }
   };
 
   return {

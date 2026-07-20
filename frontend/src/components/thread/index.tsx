@@ -1,20 +1,11 @@
 import { v4 as uuidv4 } from "uuid";
-import { ReactNode, useEffect, useRef } from "react";
+import { FormEvent, ReactNode, useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { useStreamContext } from "@/providers/Stream";
-import { useState, FormEvent } from "react";
 import { Button } from "../ui/button";
-import {
-  HumanMessage as HumanMessageClass,
-  isHumanMessage,
-} from "@langchain/core/messages";
-import { AssistantMessage, AssistantMessageLoading } from "./messages/ai";
-import { HumanMessage } from "./messages/human";
-import {
-  DO_NOT_RENDER_ID_PREFIX,
-  ensureToolCallsHaveResponses,
-} from "@/lib/ensure-tool-responses";
+import { HumanMessage as HumanMessageClass } from "@langchain/core/messages";
+import { ensureToolCallsHaveResponses } from "@/lib/ensure-tool-responses";
 import { BrandLogo } from "../brand-logo";
 import { TooltipIconButton } from "./tooltip-icon-button";
 import {
@@ -35,15 +26,22 @@ import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { Label } from "../ui/label";
 import { Switch } from "../ui/switch";
 import { useFileUpload } from "@/hooks/use-file-upload";
+import { UPLOAD_ATTACHMENT_ACCEPT } from "@/lib/multimodal-utils";
 import { ContentBlocksPreview } from "./ContentBlocksPreview";
 import { AccountMenu } from "@/components/auth/AccountMenu";
 import { useAuth } from "@/providers/Auth";
+import {
+  getKnownStreamErrorInfo,
+  isAlreadyConsumedInterruptError,
+} from "@/lib/stream-errors";
 import {
   useArtifactOpen,
   ArtifactContent,
   ArtifactTitle,
   useArtifactContext,
 } from "./artifact";
+import { ThreadMessageList } from "./message-list";
+import { useThreadMessageState } from "./hooks/use-thread-message-state";
 
 function StickyToBottomContent(props: {
   content: ReactNode;
@@ -81,7 +79,7 @@ function ScrollToBottom(props: { className?: string }) {
       onClick={() => scrollToBottom()}
     >
       <ArrowDown className="h-4 w-4" />
-      <span>Scroll to bottom</span>
+      <span>滚动到底部</span>
     </Button>
   );
 }
@@ -98,8 +96,9 @@ export function Thread() {
   );
   const [hideToolCalls, setHideToolCalls] = useQueryState(
     "hideToolCalls",
-    parseAsBoolean.withDefault(false),
+    parseAsBoolean.withDefault(true),
   );
+  const showToolCalls = !(hideToolCalls ?? true);
   const [input, setInput] = useState("");
   const [models, setModels] = useState<
     Array<{ id: string; label: string; is_default: boolean }>
@@ -117,12 +116,26 @@ export function Thread() {
     dragOver,
     handlePaste,
   } = useFileUpload();
-  const [firstTokenReceived, setFirstTokenReceived] = useState(false);
   const isLargeScreen = useMediaQuery("(min-width: 1024px)");
 
   const stream = useStreamContext();
   const messages = stream.messages;
   const isLoading = stream.isLoading;
+  const {
+    chatStarted,
+    firstTokenReceived,
+    hasNoAIOrToolMessages,
+    isThreadLoading,
+    messageListResetKey,
+    visibleMessages,
+    waitForFirstToken,
+  } = useThreadMessageState({
+    threadId,
+    streamThreadId: stream.threadId ?? null,
+    isStreamThreadLoading: stream.isThreadLoading,
+    messages,
+    hasInterrupt: !!stream.interrupt,
+  });
 
   const lastError = useRef<string | undefined>(undefined);
 
@@ -131,7 +144,7 @@ export function Thread() {
       process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
     authFetch(`${backendUrl}/models`)
       .then((response) => {
-        if (!response.ok) throw new Error("Failed to load models");
+        if (!response.ok) throw new Error("模型列表加载失败");
         return response.json();
       })
       .then((payload) => {
@@ -172,7 +185,7 @@ export function Thread() {
         });
         const result = await response.json();
         if (!response.ok) {
-          throw new Error(result.detail || `Failed to upload ${file.name}`);
+          throw new Error(result.detail || `${file.name} 上传失败`);
         }
         toast.success(`${file.name} 已加入知识库`, {
           description: `${result.chunk_count} 个检索片段`,
@@ -208,14 +221,19 @@ export function Thread() {
         return;
       }
 
+      if (isAlreadyConsumedInterruptError(message)) {
+        lastError.current = message;
+        return;
+      }
+
+      console.error("会话运行异常", stream.error);
+
       // Message is defined, and it has not been logged yet. Save it, and send the error
       lastError.current = message;
-      toast.error("An error occurred. Please try again.", {
-        description: (
-          <p>
-            <strong>Error:</strong> <code>{message}</code>
-          </p>
-        ),
+      const knownError = getKnownStreamErrorInfo(stream.error);
+      toast.error(knownError?.title ?? "出错了，请稍后重试。", {
+        description:
+          knownError?.description ?? "请求处理失败，请刷新页面或稍后再试。",
         richColors: true,
         closeButton: true,
       });
@@ -224,25 +242,15 @@ export function Thread() {
     }
   }, [stream.error]);
 
-  // TODO: this should be part of the useStream hook
-  const prevMessageLength = useRef(0);
-  useEffect(() => {
-    if (
-      messages.length !== prevMessageLength.current &&
-      messages?.length &&
-      messages[messages.length - 1].type === "ai"
-    ) {
-      setFirstTokenReceived(true);
-    }
-
-    prevMessageLength.current = messages.length;
-  }, [messages]);
-
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-    if ((input.trim().length === 0 && contentBlocks.length === 0) || isLoading)
+    if (
+      (input.trim().length === 0 && contentBlocks.length === 0) ||
+      isLoading ||
+      isThreadLoading
+    )
       return;
-    setFirstTokenReceived(false);
+    waitForFirstToken();
 
     const newHumanMessage = new HumanMessageClass({
       id: uuidv4(),
@@ -268,18 +276,11 @@ export function Thread() {
   };
 
   const handleRegenerate = (parentCheckpointId: string | undefined) => {
-    // Do this so the loading state is correct
-    prevMessageLength.current = prevMessageLength.current - 1;
-    setFirstTokenReceived(false);
+    waitForFirstToken();
     stream.submit(undefined, {
       forkFrom: parentCheckpointId,
     });
   };
-
-  const chatStarted = !!threadId || !!messages.length;
-  const hasNoAIOrToolMessages = !messages.find(
-    (m) => m.type === "ai" || m.type === "tool",
-  );
 
   return (
     <div className="bg-background flex h-dvh w-full overflow-hidden">
@@ -397,7 +398,7 @@ export function Thread() {
                 <TooltipIconButton
                   size="lg"
                   className="p-4"
-                  tooltip="New thread"
+                  tooltip="新建会话"
                   variant="ghost"
                   onClick={() => setThreadId(null)}
                 >
@@ -419,39 +420,23 @@ export function Thread() {
               )}
               contentClassName="pt-8 pb-16 max-w-3xl mx-auto flex flex-col gap-4 w-full"
               content={
-                <>
-                  {messages
-                    .filter((m) => !m.id?.startsWith(DO_NOT_RENDER_ID_PREFIX))
-                    .map((message, index) =>
-                      isHumanMessage(message) ? (
-                        <HumanMessage
-                          key={message.id || `${message.type}-${index}`}
-                          message={message}
-                          isLoading={isLoading}
-                        />
-                      ) : (
-                        <AssistantMessage
-                          key={message.id || `${message.type}-${index}`}
-                          message={message}
-                          isLoading={isLoading}
-                          handleRegenerate={handleRegenerate}
-                        />
-                      ),
-                    )}
-                  {/* Special rendering case where there are no AI/tool messages, but there is an interrupt.
-                    We need to render it outside of the messages list, since there are no messages to render */}
-                  {hasNoAIOrToolMessages && !!stream.interrupt && (
-                    <AssistantMessage
-                      key="interrupt-msg"
-                      message={undefined}
-                      isLoading={isLoading}
-                      handleRegenerate={handleRegenerate}
-                    />
-                  )}
-                  {isLoading && !firstTokenReceived && (
-                    <AssistantMessageLoading />
-                  )}
-                </>
+                <ThreadMessageList
+                  firstTokenReceived={firstTokenReceived}
+                  hasInterrupt={!!stream.interrupt}
+                  hasNoAIOrToolMessages={hasNoAIOrToolMessages}
+                  isThreadLoading={isThreadLoading}
+                  isRunLoading={isLoading}
+                  messages={visibleMessages}
+                  resetKey={messageListResetKey}
+                  threadId={threadId}
+                  onNewThread={() => setThreadId(null)}
+                  onOpenHistory={(reset) => {
+                    setChatHistoryOpen(true);
+                    setThreadId(null);
+                    reset();
+                  }}
+                  onRegenerate={handleRegenerate}
+                />
               }
               footer={
                 <div className="bg-background sticky bottom-0 flex flex-col items-center gap-6 px-2 sm:px-4">
@@ -487,6 +472,7 @@ export function Thread() {
                       <textarea
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
+                        disabled={isThreadLoading}
                         onPaste={handlePaste}
                         onKeyDown={(e) => {
                           if (
@@ -502,14 +488,14 @@ export function Thread() {
                           }
                         }}
                         placeholder="给 HY-chat 发送消息…"
-                        className="field-sizing-content resize-none border-none bg-transparent p-3.5 pb-0 shadow-none ring-0 outline-none focus:ring-0 focus:outline-none"
+                        className="field-sizing-content resize-none border-none bg-transparent p-3.5 pb-0 shadow-none ring-0 outline-none focus:ring-0 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
                       />
 
                       <div className="flex flex-wrap items-center gap-2 p-2 pt-3 sm:gap-4">
                         <label className="text-muted-foreground flex items-center gap-2 text-sm">
                           <span className="hidden sm:inline">模型</span>
                           <select
-                            aria-label="Select model"
+                            aria-label="选择模型"
                             value={selectedModel}
                             onChange={(event) =>
                               changeModel(event.target.value)
@@ -517,7 +503,7 @@ export function Thread() {
                             className="bg-background text-foreground max-w-36 rounded-md border px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-gray-300 sm:max-w-none"
                           >
                             {!models.length && (
-                              <option value="">Default model</option>
+                              <option value="">默认模型</option>
                             )}
                             {models.map((model) => (
                               <option
@@ -525,7 +511,7 @@ export function Thread() {
                                 value={model.id}
                               >
                                 {model.label}
-                                {model.is_default ? " (default)" : ""}
+                                {model.is_default ? "（默认）" : ""}
                               </option>
                             ))}
                           </select>
@@ -534,15 +520,18 @@ export function Thread() {
                           <div className="flex items-center space-x-2">
                             <Switch
                               id="render-tool-calls"
-                              checked={hideToolCalls ?? false}
-                              onCheckedChange={setHideToolCalls}
+                              aria-label="查看工具执行过程"
+                              checked={showToolCalls}
+                              onCheckedChange={(checked) =>
+                                setHideToolCalls(!checked)
+                              }
                             />
                             <Label
                               htmlFor="render-tool-calls"
                               className="text-muted-foreground text-sm"
                             >
                               <span className="hidden sm:inline">
-                                隐藏工具调用
+                                查看工具执行过程
                               </span>
                             </Label>
                           </div>
@@ -561,7 +550,7 @@ export function Thread() {
                           type="file"
                           onChange={handleFileUpload}
                           multiple
-                          accept="image/jpeg,image/png,image/gif,image/webp,application/pdf"
+                          accept={UPLOAD_ATTACHMENT_ACCEPT}
                           className="hidden"
                         />
                         <button
@@ -600,6 +589,7 @@ export function Thread() {
                             className="ml-auto shadow-md transition-all"
                             disabled={
                               isLoading ||
+                              isThreadLoading ||
                               (!input.trim() && contentBlocks.length === 0)
                             }
                           >

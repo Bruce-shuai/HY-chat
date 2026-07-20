@@ -15,8 +15,10 @@ import { LoadExternalComponent } from "@langchain/langgraph-sdk/react-ui";
 import { cn } from "@/lib/utils";
 import { ToolCalls, ToolResult } from "./tool-calls";
 import { Fragment } from "react/jsx-runtime";
+import { useEffect, useState } from "react";
 import { isAgentInboxInterruptSchema } from "@/lib/agent-inbox-interrupt";
 import { ThreadView } from "../agent-inbox";
+import { prettifyText } from "../agent-inbox/utils";
 import { useQueryState, parseAsBoolean } from "nuqs";
 import { GenericInterruptView } from "./generic-interrupt";
 import { useArtifact } from "../artifact";
@@ -104,6 +106,80 @@ function Interrupt({
   );
 }
 
+function parseToolContent(content: unknown): unknown {
+  if (typeof content !== "string") return content;
+
+  try {
+    return JSON.parse(content);
+  } catch {
+    return content;
+  }
+}
+
+function getStringField(value: unknown, field: string): string | undefined {
+  if (!value || typeof value !== "object") return undefined;
+
+  const record = value as Record<string, unknown>;
+  const fieldValue = record[field];
+  return typeof fieldValue === "string" && fieldValue.trim()
+    ? fieldValue
+    : undefined;
+}
+
+function getToolFallbackMarkdown(message: BaseMessage): string {
+  const toolName =
+    typeof (message as { name?: unknown }).name === "string"
+      ? ((message as { name?: string }).name ?? "")
+      : "";
+  const toolLabel = toolName ? prettifyText(toolName) : "工具";
+  const parsedContent = parseToolContent(message.content);
+  const error = getStringField(parsedContent, "error");
+
+  if (toolName === "generate_image") {
+    const markdown = getStringField(parsedContent, "markdown");
+    const imageUrl = getStringField(parsedContent, "image_url");
+
+    if (markdown) return `图片生成结果如下：\n\n${markdown}`;
+    if (imageUrl) return `图片生成结果如下：\n\n![生成图片](${imageUrl})`;
+    if (error) return `图片生成没有完成。\n\n原因：${error}`;
+
+    return "图片生成已执行，但服务没有返回可展示的图片。";
+  }
+
+  if (error) return `${toolLabel}没有完成。\n\n原因：${error}`;
+
+  const payload =
+    typeof parsedContent === "string"
+      ? parsedContent
+      : (JSON.stringify(parsedContent, null, 2) ?? "无返回内容");
+
+  return `${toolLabel}已执行完成，但没有生成后续回答。下面是工具返回结果：\n\n\`\`\`json\n${payload}\n\`\`\``;
+}
+
+function HiddenToolResultFallback({ message }: { message: BaseMessage }) {
+  return (
+    <div className="py-1">
+      <MarkdownText>{getToolFallbackMarkdown(message)}</MarkdownText>
+    </div>
+  );
+}
+
+function getLoadingText(elapsedSeconds: number) {
+  if (elapsedSeconds >= 45) {
+    return "大模型仍在处理，可能正在等待工具或外部服务返回结果…";
+  }
+
+  if (elapsedSeconds >= 15) {
+    return "大模型仍在运作中，请再稍候…";
+  }
+
+  if (elapsedSeconds >= 6) {
+    return "正在调用模型或工具，请稍候…";
+  }
+
+  return "正在思考…";
+}
+
 export function AssistantMessage({
   message,
   isLoading,
@@ -117,7 +193,7 @@ export function AssistantMessage({
   const contentString = getContentString(content);
   const [hideToolCalls] = useQueryState(
     "hideToolCalls",
-    parseAsBoolean.withDefault(false),
+    parseAsBoolean.withDefault(true),
   );
 
   const thread = useStreamContext();
@@ -146,8 +222,27 @@ export function AssistantMessage({
     );
   const hasAnthropicToolCalls = !!anthropicStreamedToolCalls?.length;
   const isToolResult = !!message && isToolMessage(message);
+  const messageIndex = message
+    ? thread.messages.findIndex((item) => item.id === message.id)
+    : -1;
+  const hasLaterAssistantContent =
+    messageIndex >= 0 &&
+    thread.messages
+      .slice(messageIndex + 1)
+      .some(
+        (item) =>
+          item.type === "ai" &&
+          getContentString(item.content).trim().length > 0,
+      );
+  const shouldShowInterrupt =
+    !!threadInterrupt && (isLastMessage || hasNoAIOrToolMessages);
+  const isPendingApproval = isAgentInboxInterruptSchema(threadInterrupt);
 
   if (isToolResult && hideToolCalls) {
+    if (!isLoading && !hasLaterAssistantContent) {
+      return <HiddenToolResultFallback message={message} />;
+    }
+
     return null;
   }
 
@@ -171,16 +266,37 @@ export function AssistantMessage({
               </div>
             )}
 
+            <Interrupt
+              interrupt={threadInterrupt}
+              isLastMessage={isLastMessage}
+              hasNoAIOrToolMessages={hasNoAIOrToolMessages}
+            />
+
             {!hideToolCalls && (
               <>
                 {(hasToolCalls && toolCallsHaveContents && (
-                  <ToolCalls toolCalls={message.tool_calls} />
+                  <ToolCalls
+                    toolCalls={message.tool_calls}
+                    waitingForApproval={
+                      shouldShowInterrupt && isPendingApproval
+                    }
+                  />
                 )) ||
                   (hasAnthropicToolCalls && (
-                    <ToolCalls toolCalls={anthropicStreamedToolCalls} />
+                    <ToolCalls
+                      toolCalls={anthropicStreamedToolCalls}
+                      waitingForApproval={
+                        shouldShowInterrupt && isPendingApproval
+                      }
+                    />
                   )) ||
                   (hasToolCalls && (
-                    <ToolCalls toolCalls={message.tool_calls} />
+                    <ToolCalls
+                      toolCalls={message.tool_calls}
+                      waitingForApproval={
+                        shouldShowInterrupt && isPendingApproval
+                      }
+                    />
                   ))}
               </>
             )}
@@ -191,11 +307,6 @@ export function AssistantMessage({
                 thread={thread}
               />
             )}
-            <Interrupt
-              interrupt={threadInterrupt}
-              isLastMessage={isLastMessage}
-              hasNoAIOrToolMessages={hasNoAIOrToolMessages}
-            />
             <div
               className={cn(
                 "mr-auto flex items-center gap-2 transition-opacity",
@@ -217,12 +328,36 @@ export function AssistantMessage({
 }
 
 export function AssistantMessageLoading() {
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
+  useEffect(() => {
+    const startedAt = Date.now();
+    const timer = window.setInterval(() => {
+      setElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000));
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const loadingText = getLoadingText(elapsedSeconds);
+
   return (
     <div className="mr-auto flex items-start gap-2">
-      <div className="bg-muted flex h-8 items-center gap-1 rounded-2xl px-4 py-2">
-        <div className="bg-foreground/50 h-1.5 w-1.5 animate-[pulse_1.5s_ease-in-out_infinite] rounded-full"></div>
-        <div className="bg-foreground/50 h-1.5 w-1.5 animate-[pulse_1.5s_ease-in-out_0.5s_infinite] rounded-full"></div>
-        <div className="bg-foreground/50 h-1.5 w-1.5 animate-[pulse_1.5s_ease-in-out_1s_infinite] rounded-full"></div>
+      <div className="bg-muted text-muted-foreground flex max-w-full flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl px-4 py-2 text-sm">
+        <span
+          className="flex shrink-0 items-center gap-1"
+          aria-hidden="true"
+        >
+          <span className="bg-foreground/50 h-1.5 w-1.5 animate-[pulse_1.5s_ease-in-out_infinite] rounded-full" />
+          <span className="bg-foreground/50 h-1.5 w-1.5 animate-[pulse_1.5s_ease-in-out_0.5s_infinite] rounded-full" />
+          <span className="bg-foreground/50 h-1.5 w-1.5 animate-[pulse_1.5s_ease-in-out_1s_infinite] rounded-full" />
+        </span>
+        <span>{loadingText}</span>
+        {elapsedSeconds >= 10 && (
+          <span className="text-muted-foreground/80 text-xs">
+            已等待 {elapsedSeconds} 秒
+          </span>
+        )}
       </div>
     </div>
   );

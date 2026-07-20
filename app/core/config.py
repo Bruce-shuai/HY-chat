@@ -53,9 +53,10 @@ class Settings(BaseSettings):
     )
     zhipu_chat_model: str = Field(default="glm-5.2", alias="ZHIPU_CHAT_MODEL")
     zhipu_chat_models: str = Field(
-        default="glm-5.2,glm-4.5,glm-4-flash",
+        default="glm-5.2,glm-5.1,glm-5-turbo",
         alias="ZHIPU_CHAT_MODELS",
     )
+    zhipu_image_model: str = Field(default="glm-image", alias="ZHIPU_IMAGE_MODEL")
     zhipu_embedding_model: str = Field(
         default="embedding-3", alias="ZHIPU_EMBEDDING_MODEL"
     )
@@ -64,6 +65,11 @@ class Settings(BaseSettings):
     tavily_api_key: str = Field(default="", alias="TAVILY_API_KEY")
     alpha_vantage_api_key: str = Field(default="", alias="ALPHA_VANTAGE_API_KEY")
     external_api_timeout: float = Field(default=20.0, alias="EXTERNAL_API_TIMEOUT")
+    image_generation_enabled: bool = Field(
+        default=True,
+        alias="DEFAULT_ALLOW_IMAGE_GENERATION",
+    )
+    image_api_timeout: float = Field(default=120.0, alias="IMAGE_API_TIMEOUT")
 
     cache_enabled: bool = Field(default=True, alias="CACHE_ENABLED")
     cache_default_ttl: int = Field(default=600, alias="CACHE_DEFAULT_TTL")

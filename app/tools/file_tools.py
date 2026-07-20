@@ -53,7 +53,7 @@ def safe_path(path: str | Path) -> Path:
         p = root / p
     resolved = p.resolve()
     if root not in [resolved, *resolved.parents]:
-        raise ValueError(f"Path is outside workspace root: {resolved}")
+        raise ValueError(f"路径不在工作区内：{resolved}")
     return resolved
 
 
@@ -76,7 +76,7 @@ def _iter_files(root: Path, max_files: int = 200) -> Iterable[Path]:
 def list_files(path: str, max_files: int = 120) -> JsonObject:
     root = safe_path(path)
     if not root.exists():
-        return {"files": [], "error": f"path not found: {root}"}
+        return {"files": [], "error": f"路径不存在：{root}"}
     files = [str(p.relative_to(root)) for p in _iter_files(root, max_files=max_files)]
     return {"root": str(root), "files": files, "count": len(files)}
 
@@ -84,7 +84,7 @@ def list_files(path: str, max_files: int = 120) -> JsonObject:
 def read_file(path: str, max_chars: int = 12000) -> JsonObject:
     p = safe_path(path)
     if not p.exists() or not p.is_file():
-        return {"path": str(p), "content": "", "error": "file not found"}
+        return {"path": str(p), "content": "", "error": "文件不存在"}
     content = p.read_text(encoding="utf-8", errors="ignore")[:max_chars]
     return {"path": str(p), "content": content, "truncated": len(content) >= max_chars}
 
@@ -92,7 +92,7 @@ def read_file(path: str, max_chars: int = 12000) -> JsonObject:
 def search_code(path: str, query: str, max_results: int = 40) -> JsonObject:
     root = safe_path(path)
     if not root.exists():
-        return {"matches": [], "error": f"path not found: {root}"}
+        return {"matches": [], "error": f"路径不存在：{root}"}
 
     query_lower = query.lower().strip()
     matches: list[JsonObject] = []

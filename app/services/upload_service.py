@@ -30,7 +30,7 @@ def temporary_upload(
                 total_bytes += len(block)
                 if total_bytes > max_bytes:
                     raise UploadTooLargeError(
-                        f"文件超过 {max_bytes // BYTES_PER_MEBIBYTE} MB 限制"
+                        f"文件超过 {max_bytes // BYTES_PER_MEBIBYTE} 兆字节限制"
                     )
                 output.write(block)
         yield path

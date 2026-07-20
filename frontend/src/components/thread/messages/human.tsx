@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { CommandBar } from "./shared";
 import { MultimodalPreview } from "@/components/thread/MultimodalPreview";
 import { isBase64ContentBlock } from "@/lib/multimodal-utils";
+import { MarkdownText } from "../markdown-text";
 
 function EditableContent({
   value,
@@ -49,6 +50,7 @@ export function HumanMessage({
   const [isEditing, setIsEditing] = useState(false);
   const [value, setValue] = useState("");
   const contentString = getContentString(message.content);
+  const shouldRenderAsMarkdown = contentString.includes("```");
 
   const handleSubmitEdit = () => {
     setIsEditing(false);
@@ -100,9 +102,15 @@ export function HumanMessage({
             )}
             {/* Render text if present, otherwise fallback to file/image name */}
             {contentString ? (
-              <p className="bg-muted ml-auto w-fit rounded-3xl px-4 py-2 text-right whitespace-pre-wrap">
-                {contentString}
-              </p>
+              shouldRenderAsMarkdown ? (
+                <div className="bg-muted ml-auto max-w-[min(80vw,56rem)] rounded-2xl px-4 py-3 text-left">
+                  <MarkdownText>{contentString}</MarkdownText>
+                </div>
+              ) : (
+                <p className="bg-muted ml-auto w-fit max-w-[min(80vw,42rem)] rounded-3xl px-4 py-2 text-left break-words whitespace-pre-wrap">
+                  {contentString}
+                </p>
+              )
             ) : null}
           </div>
         )}

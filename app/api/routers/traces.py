@@ -47,5 +47,5 @@ def get_trace(
 ):
     row = db.get(TraceSpan, trace_id)
     if not row or (row.user_id != user.id and user.role != UserRole.ADMIN):
-        raise HTTPException(status_code=404, detail="Trace 不存在")
+        raise HTTPException(status_code=404, detail="运行追踪不存在")
     return serialize_span(row, include_payload=True)

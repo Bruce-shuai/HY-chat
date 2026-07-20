@@ -52,12 +52,12 @@ def upload_document(
     if extension not in SUPPORTED_EXTENSIONS:
         raise HTTPException(
             status_code=415,
-            detail=f"Unsupported file type '{extension}'. Supported: {sorted(SUPPORTED_EXTENSIONS)}",
+            detail=f"不支持的文件类型：{extension}",
         )
     try:
         parsed_metadata = json.loads(metadata) if metadata else {}
         if not isinstance(parsed_metadata, dict):
-            raise ValueError("metadata must be a JSON object")
+            raise ValueError("元数据必须是对象")
     except (json.JSONDecodeError, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -72,7 +72,7 @@ def upload_document(
                 total += len(block)
                 if total > settings.max_upload_bytes:
                     raise ValueError(
-                        f"文件超过 {settings.max_upload_bytes // BYTES_PER_MEBIBYTE} MB 限制"
+                        f"文件超过 {settings.max_upload_bytes // BYTES_PER_MEBIBYTE} 兆字节限制"
                     )
                 output.write(block)
         stored_file = FileService(db).create_from_path(
@@ -128,7 +128,7 @@ def delete_document(
     db: Session = Depends(get_db),
 ):
     if not RagService(db, user_id=user.id).delete_document(document_id):
-        raise HTTPException(status_code=404, detail="document not found")
+        raise HTTPException(status_code=404, detail="文档不存在")
     return {"status": "deleted", "document_id": document_id}
 
 

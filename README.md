@@ -35,6 +35,8 @@ TAVILY_API_KEY=
 ALPHA_VANTAGE_API_KEY=
 ```
 
+默认聊天模型使用 `glm-5.2`，模型列表只保留 5 系列：`glm-5.2`、`glm-5.1`、`glm-5-turbo`。
+
 启动全部服务：
 
 ```bash
@@ -230,7 +232,7 @@ FastAPI SSE：
 curl -N -X POST http://localhost:8000/chat/stream \
   -H 'Authorization: Bearer <access_token>' \
   -H 'Content-Type: application/json' \
-  -d '{"message":"查询上海天气并总结","model":"glm-4-flash"}'
+  -d '{"message":"查询上海天气并总结","model":"glm-5.2"}'
 ```
 
 事件类型为 `metadata`、`token`、`done` 和 `error`。缓存命中状态位于 `metadata.cache_hit`。Redis 不可用时缓存自动降级。

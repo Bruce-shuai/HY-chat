@@ -23,7 +23,7 @@ class ChatStreamRequest(BaseModel):
     @model_validator(mode="after")
     def validate_input(self):
         if not self.message and not self.messages:
-            raise ValueError("message or messages is required")
+            raise ValueError("请提供消息内容")
         return self
 
     def normalized_messages(self) -> list[ChatMessagePayload]:

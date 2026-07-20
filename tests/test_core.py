@@ -2,6 +2,7 @@ import logging
 import time
 from types import SimpleNamespace
 
+import pytest
 from langchain.messages import AIMessage, HumanMessage, ToolMessage
 from langgraph.runtime import Runtime, ServerInfo
 from sqlalchemy import create_engine, select
@@ -20,10 +21,12 @@ from app.cache.service import CacheService
 from app.core.logging import configure_logging
 from app.db.models import Conversation, TraceSpan
 from app.db.session import Base
-from app.models.catalog import list_models, resolve_model
+import app.models.catalog as catalog_module
 from app.rag.embeddings import EmbeddingService
-from app.tools.registry import tool_manifest
 from app.storage.service import storage
+from app.tools import external as external_tools
+from app.tools import image_tools
+from app.tools.registry import tool_manifest
 
 
 def test_logging_configuration_sets_root_level():
@@ -53,12 +56,34 @@ class FakeRedis:
         return True
 
 
-def test_model_catalog_and_tool_registry():
-    models = list_models()
+def test_model_catalog_and_tool_registry(monkeypatch):
+    monkeypatch.setattr(catalog_module.settings, "zhipu_chat_model", "glm-5.2")
+    monkeypatch.setattr(
+        catalog_module.settings,
+        "zhipu_chat_models",
+        "glm-5.2,glm-5.1,glm-5-turbo",
+    )
+
+    models = catalog_module.list_models()
     assert models
-    assert resolve_model(None) in {model.id for model in models}
+    assert catalog_module.resolve_model(None) in {model.id for model in models}
+    assert [model.id for model in models] == [
+        "glm-5.2",
+        "glm-5.1",
+        "glm-5-turbo",
+    ]
+    assert models[0].tier == "旗舰"
+    assert "推荐" in models[0].label
+    assert models[1].tier == "高性能"
+    assert models[2].tier == "工具增强"
+    assert all(model.label != model.id for model in models)
+    assert catalog_module.normalize_model_allowlist(
+        ["glm-5.2", "glm-4-flash", "glm-4-plus", "glm-4.5"]
+    ) == ["glm-5.2", "glm-5.1", "glm-5-turbo"]
+    assert catalog_module.normalize_model_allowlist(["glm-5.1"]) == ["glm-5.1"]
     assert {tool["name"] for tool in tool_manifest()} >= {
         "search_knowledge_base",
+        "generate_image",
         "web_search",
         "get_weather",
         "get_stock_quote",
@@ -209,6 +234,213 @@ def test_structured_tool_failure_is_recorded_as_trace_error():
     assert trace.status == "error"
     assert trace.error_message == "Web Search is not configured"
     assert trace.ended_at is not None
+
+
+def test_tool_policy_violation_returns_structured_tool_message(monkeypatch):
+    class FakeSession:
+        def __init__(self):
+            self.closed = False
+
+        def close(self):
+            self.closed = True
+
+    session = FakeSession()
+
+    def reject_tool(*_args):
+        raise chat_module.PolicyViolation("已被高成本工具权限拦截")
+
+    monkeypatch.setattr(chat_module, "SessionLocal", lambda: session)
+    monkeypatch.setattr(chat_module, "enforce_tool", reject_tool)
+    request = SimpleNamespace(
+        state={"auth_user_id": "user-1"},
+        runtime=SimpleNamespace(),
+        tool_call={
+            "id": "call-stock",
+            "name": "get_stock_quote",
+            "args": {"symbol": "SPY"},
+        },
+    )
+
+    def unexpected_handler(_request):
+        raise AssertionError("权限失败时不应继续执行真实工具")
+
+    result = PolicyTraceMiddleware().wrap_tool_call(request, unexpected_handler)
+
+    assert isinstance(result, ToolMessage)
+    assert result.name == "get_stock_quote"
+    assert "已被高成本工具权限拦截" in result.content
+    assert session.closed
+
+
+def test_model_policy_violation_returns_user_facing_message(monkeypatch):
+    class FakeSession:
+        def __init__(self):
+            self.closed = False
+
+        def close(self):
+            self.closed = True
+
+    session = FakeSession()
+
+    def reject_model(*_args):
+        raise chat_module.PolicyViolation("请求过于频繁：每分钟最多 1 次")
+
+    monkeypatch.setattr(chat_module, "SessionLocal", lambda: session)
+    monkeypatch.setattr(chat_module, "enforce_model", reject_model)
+    request = SimpleNamespace(
+        state={"auth_user_id": "user-1", "selected_model": "glm-5.2"},
+        runtime=SimpleNamespace(),
+    )
+
+    def unexpected_handler(_request):
+        raise AssertionError("限流时不应继续调用真实模型")
+
+    result = PolicyTraceMiddleware().wrap_model_call(request, unexpected_handler)
+
+    assert "发送太频繁了" in result.result[0].content
+    assert "每分钟最多 1 次" in result.result[0].content
+    assert session.closed
+
+
+@pytest.mark.asyncio
+async def test_async_model_policy_violation_returns_user_facing_message(monkeypatch):
+    class FakeSession:
+        def __init__(self):
+            self.closed = False
+
+        def close(self):
+            self.closed = True
+
+    session = FakeSession()
+
+    def reject_model(*_args):
+        raise chat_module.PolicyViolation("请求过于频繁：每分钟最多 1 次")
+
+    monkeypatch.setattr(chat_module, "SessionLocal", lambda: session)
+    monkeypatch.setattr(chat_module, "enforce_model", reject_model)
+    request = SimpleNamespace(
+        state={"auth_user_id": "user-1", "selected_model": "glm-5.2"},
+        runtime=SimpleNamespace(),
+    )
+
+    async def unexpected_handler(_request):
+        raise AssertionError("限流时不应继续调用真实模型")
+
+    result = await PolicyTraceMiddleware().awrap_model_call(
+        request, unexpected_handler
+    )
+
+    assert "发送太频繁了" in result.result[0].content
+    assert "每分钟最多 1 次" in result.result[0].content
+    assert session.closed
+
+
+def test_image_generation_tool_validates_missing_configuration(monkeypatch):
+    monkeypatch.setattr(image_tools.settings, "image_generation_enabled", True)
+    monkeypatch.setattr(image_tools.settings, "zhipu_api_key", "")
+
+    result = image_tools.generate_image.func("雨天打伞的小狗")
+
+    assert result["error"] == "图片生成尚未配置，请联系管理员配置图片生成服务。"
+
+
+def test_stock_quote_maps_chinese_index_alias(monkeypatch):
+    captured = {}
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "Global Quote": {
+                    "01. symbol": "SPY",
+                    "02. open": "620.0000",
+                    "03. high": "622.0000",
+                    "04. low": "618.0000",
+                    "05. price": "621.5000",
+                    "06. volume": "123456",
+                    "07. latest trading day": "2026-07-20",
+                    "08. previous close": "619.0000",
+                    "09. change": "2.5000",
+                    "10. change percent": "0.4039%",
+                }
+            }
+
+    class FakeClient:
+        def __init__(self, timeout):
+            captured["timeout"] = timeout
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        def get(self, url, params):
+            captured["url"] = url
+            captured["params"] = params
+            return FakeResponse()
+
+    monkeypatch.setattr(external_tools.settings, "alpha_vantage_api_key", "test-key")
+    monkeypatch.setattr(external_tools.cache, "get_json", lambda _key: None)
+    monkeypatch.setattr(external_tools.cache, "set_json", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(external_tools.httpx, "Client", FakeClient)
+
+    result = external_tools.get_stock_quote.func("标普500当前价格")
+
+    assert captured["params"]["symbol"] == "SPY"
+    assert result["requested_symbol"] == "标普500当前价格"
+    assert result["resolved_symbol"] == "SPY"
+    assert result["display_name"] == "标普500 ETF（SPY，跟踪标普500指数）"
+    assert result["price"] == "621.5000"
+
+
+def test_image_generation_tool_returns_markdown_from_service(monkeypatch):
+    captured = {}
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"data": [{"url": "https://example.test/dog.png"}]}
+
+    class FakeClient:
+        def __init__(self, timeout):
+            captured["timeout"] = timeout
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        def post(self, url, headers, json):
+            captured["url"] = url
+            captured["headers"] = headers
+            captured["json"] = json
+            return FakeResponse()
+
+    monkeypatch.setattr(image_tools.settings, "image_generation_enabled", True)
+    monkeypatch.setattr(image_tools.settings, "zhipu_api_key", "test-key")
+    monkeypatch.setattr(image_tools.settings, "zhipu_base_url", "https://example.test")
+    monkeypatch.setattr(image_tools.settings, "zhipu_image_model", "glm-image")
+    monkeypatch.setattr(image_tools.settings, "image_api_timeout", 120.0)
+    monkeypatch.setattr(image_tools.httpx, "Client", FakeClient)
+
+    result = image_tools.generate_image.func("雨天打伞的小狗", "1280x1280")
+
+    assert captured["url"] == "https://example.test/images/generations"
+    assert captured["json"] == {
+        "model": "glm-image",
+        "prompt": "雨天打伞的小狗",
+        "size": "1280x1280",
+        "quality": "hd",
+    }
+    assert captured["headers"]["Authorization"] == "Bearer test-key"
+    assert result["image_url"] == "https://example.test/dog.png"
+    assert result["markdown"] == "![生成图片](https://example.test/dog.png)"
 
 
 def test_local_storage_round_trip(tmp_path, monkeypatch):

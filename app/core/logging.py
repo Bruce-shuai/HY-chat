@@ -12,7 +12,7 @@ def configure_logging(log_level: str = "INFO") -> None:
     level_name = log_level.strip().upper()
     level = logging.getLevelNamesMapping().get(level_name)
     if not isinstance(level, int):
-        raise ValueError(f"Unsupported log level: {log_level}")
+        raise ValueError(f"不支持的日志级别：{log_level}")
 
     logging.basicConfig(
         level=level,

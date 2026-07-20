@@ -3,16 +3,16 @@ from __future__ import annotations
 import json
 import logging
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Mapping
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
-from langchain.messages import AIMessage, AIMessageChunk
+from langchain.messages import AIMessage, AIMessageChunk, ToolMessage
 
 from app.agents.chat import graph
 from app.auth.dependencies import get_current_user
 from app.cache.service import cache
-from app.core.config import PRODUCTION_ENVIRONMENTS, get_settings
+from app.core.config import get_settings
 from app.core.types import JsonObject
 from app.db.models import Conversation, User
 from app.db.session import get_db
@@ -30,6 +30,26 @@ def _sse(event: str, data: JsonObject) -> str:
     return (
         f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False, default=str)}\n\n"
     )
+
+
+def _tool_error_from_content(content: object) -> str | None:
+    parsed = content
+    if isinstance(content, str):
+        try:
+            parsed = json.loads(content)
+        except json.JSONDecodeError:
+            return None
+
+    if isinstance(parsed, Mapping) and parsed.get("error"):
+        return str(parsed["error"])
+    return None
+
+
+def _empty_response_fallback(tool_errors: list[str]) -> str:
+    if tool_errors:
+        reason = "；".join(dict.fromkeys(tool_errors))
+        return f"查询失败。\n\n原因：{reason}"
+    return "本次请求没有生成可展示的回答，请稍后重试。"
 
 
 @router.post("/stream")
@@ -80,6 +100,7 @@ async def stream_chat(
             {"model": model, "cache_hit": False, "request_id": request_id},
         )
         content_parts: list[str] = []
+        tool_errors: list[str] = []
         try:
             async for chunk in graph.astream(
                 {
@@ -92,6 +113,10 @@ async def stream_chat(
                 stream_mode="messages",
             ):
                 message = chunk[0] if isinstance(chunk, tuple) else chunk
+                if isinstance(message, ToolMessage):
+                    error_message = _tool_error_from_content(message.content)
+                    if error_message:
+                        tool_errors.append(error_message)
                 if isinstance(message, (AIMessage, AIMessageChunk)) and isinstance(
                     message.content, str
                 ):
@@ -99,6 +124,10 @@ async def stream_chat(
                         content_parts.append(message.content)
                         yield _sse("token", {"content": message.content})
             content = "".join(content_parts)
+            if not content:
+                content = _empty_response_fallback(tool_errors)
+                content_parts.append(content)
+                yield _sse("token", {"content": content})
             if request.use_cache and content:
                 cache.set_json(cache_key, {"content": content}, ttl=600)
             yield _sse(
@@ -112,13 +141,15 @@ async def stream_chat(
                 user.id,
                 model,
             )
-            is_production = settings.app_env.strip().lower() in PRODUCTION_ENVIRONMENTS
+            if not content_parts:
+                yield _sse(
+                    "token",
+                    {"content": "查询失败。\n\n原因：聊天服务暂时不可用，请稍后重试。"},
+                )
             yield _sse(
                 "error",
                 {
-                    "message": (
-                        "聊天服务暂时不可用，请稍后重试" if is_production else str(exc)
-                    ),
+                    "message": "聊天服务暂时不可用，请稍后重试",
                     "request_id": request_id,
                 },
             )

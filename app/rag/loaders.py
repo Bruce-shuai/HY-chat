@@ -104,10 +104,7 @@ def load_document(path: str | Path) -> list[LoadedSection]:
     file_path = Path(path)
     extension = file_path.suffix.lower()
     if extension not in SUPPORTED_EXTENSIONS:
-        supported = ", ".join(sorted(SUPPORTED_EXTENSIONS))
-        raise ValueError(
-            f"Unsupported document type '{extension}'. Supported: {supported}"
-        )
+        raise ValueError(f"不支持的文档类型：{extension}")
 
     if extension == ".pdf":
         sections = _load_pdf(file_path)
@@ -128,5 +125,5 @@ def load_document(path: str | Path) -> list[LoadedSection]:
         sections = [LoadedSection(text=text)] if text.strip() else []
 
     if not sections:
-        raise ValueError("No extractable text was found in the document")
+        raise ValueError("文档中没有可提取的文本")
     return sections

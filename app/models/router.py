@@ -64,8 +64,8 @@ class ModelRouter:
     def _mock_response(self, messages: list[ChatMessagePayload]) -> str:
         last = messages[-1].get("content", "") if messages else ""
         return (
-            "【Mock 模型输出】\n"
-            "你还没有配置 ZHIPU_API_KEY，所以这里没有真实调用大模型。\n\n"
+            "【模拟模型输出】\n"
+            "你还没有配置真实模型密钥，所以这里没有真实调用大模型。\n\n"
             "我已经接收到了任务，并基于项目扫描结果生成了一个学习版回复。\n\n"
             f"用户任务片段：{last[:500]}"
         )

@@ -63,11 +63,76 @@ function backendUrl() {
   return process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
 }
 
+function isPolicy(value: unknown): value is Policy {
+  if (!value || typeof value !== "object") return false;
+  const policy = value as Partial<Policy>;
+  return (
+    Array.isArray(policy.allowed_models) &&
+    typeof policy.rpm_limit === "number" &&
+    typeof policy.monthly_token_quota === "number" &&
+    typeof policy.tokens_used === "number" &&
+    typeof policy.quota_reset_at === "string" &&
+    typeof policy.allow_high_cost_tools === "boolean"
+  );
+}
+
+function isAccount(value: unknown): value is Account {
+  if (!value || typeof value !== "object") return false;
+  const account = value as Partial<Account>;
+  const user = account.user as Partial<AuthUser> | undefined;
+  return (
+    typeof account.access_token === "string" &&
+    typeof account.refresh_token === "string" &&
+    typeof account.expires_in === "number" &&
+    !!user &&
+    typeof user.id === "string" &&
+    typeof user.email === "string" &&
+    typeof user.display_name === "string" &&
+    (user.role === "admin" || user.role === "user") &&
+    typeof user.is_active === "boolean" &&
+    typeof user.created_at === "string" &&
+    isPolicy(user.policy)
+  );
+}
+
+function safeGetLocalStorage(key: string): string | null {
+  try {
+    if (typeof window === "undefined") return null;
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function safeSetLocalStorage(key: string, value: string) {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    // no-op
+  }
+}
+
+function safeRemoveLocalStorage(key: string) {
+  try {
+    window.localStorage.removeItem(key);
+  } catch {
+    // no-op
+  }
+}
+
 function loadAccounts(): Account[] {
   if (typeof window === "undefined") return [];
   try {
-    return JSON.parse(window.localStorage.getItem(ACCOUNTS_KEY) || "[]");
+    const parsed = JSON.parse(safeGetLocalStorage(ACCOUNTS_KEY) || "[]");
+    if (!Array.isArray(parsed)) {
+      safeRemoveLocalStorage(ACCOUNTS_KEY);
+      safeRemoveLocalStorage(ACTIVE_KEY);
+      return [];
+    }
+    return parsed.filter(isAccount);
   } catch {
+    safeRemoveLocalStorage(ACCOUNTS_KEY);
+    safeRemoveLocalStorage(ACTIVE_KEY);
     return [];
   }
 }
@@ -78,12 +143,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
 
   const persist = useCallback((next: Account[], nextActive?: string | null) => {
-    setAccounts(next);
-    window.localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(next));
+    const validAccounts = next.filter(isAccount);
+    setAccounts(validAccounts);
+    safeSetLocalStorage(ACCOUNTS_KEY, JSON.stringify(validAccounts));
     if (nextActive !== undefined) {
-      setActiveId(nextActive);
-      if (nextActive) window.localStorage.setItem(ACTIVE_KEY, nextActive);
-      else window.localStorage.removeItem(ACTIVE_KEY);
+      const validNextActive = validAccounts.some(
+        (item) => item.user.id === nextActive,
+      )
+        ? nextActive
+        : null;
+      setActiveId(validNextActive);
+      if (validNextActive) safeSetLocalStorage(ACTIVE_KEY, validNextActive);
+      else safeRemoveLocalStorage(ACTIVE_KEY);
     }
   }, []);
 
@@ -91,15 +162,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     const bootstrap = async () => {
       let stored = loadAccounts();
-      const requested = window.localStorage.getItem(ACTIVE_KEY);
-      let active =
+      const requested = safeGetLocalStorage(ACTIVE_KEY);
+      let active: Account | undefined =
         stored.find((item) => item.user.id === requested) || stored[0];
       if (active) {
         const me = await fetch(`${backendUrl()}/auth/me`, {
           headers: { Authorization: `Bearer ${active.access_token}` },
         }).catch(() => null);
         if (me?.ok) {
-          active = { ...active, user: await me.json() };
+          const user = await me.json();
+          active = isAccount({ ...active, user })
+            ? { ...active, user }
+            : undefined;
         } else {
           const refreshed = await fetch(`${backendUrl()}/auth/refresh`, {
             method: "POST",
@@ -107,7 +181,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             body: JSON.stringify({ refresh_token: active.refresh_token }),
           }).catch(() => null);
           if (refreshed?.ok) {
-            active = (await refreshed.json()) as Account;
+            const refreshedAccount = await refreshed.json();
+            active = isAccount(refreshedAccount) ? refreshedAccount : undefined;
           } else if (
             me &&
             [401, 403].includes(me.status) &&
@@ -128,9 +203,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!cancelled) {
         setAccounts(stored);
         setActiveId(active?.user.id || null);
-        window.localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(stored));
-        if (active) window.localStorage.setItem(ACTIVE_KEY, active.user.id);
-        else window.localStorage.removeItem(ACTIVE_KEY);
+        safeSetLocalStorage(ACCOUNTS_KEY, JSON.stringify(stored));
+        if (active) safeSetLocalStorage(ACTIVE_KEY, active.user.id);
+        else safeRemoveLocalStorage(ACTIVE_KEY);
         setReady(true);
       }
     };
@@ -162,7 +237,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.detail || "认证失败");
-      saveAccount(result as Account);
+      if (!isAccount(result)) throw new Error("登录返回数据异常");
+      saveAccount(result);
     },
     [saveAccount],
   );
@@ -175,7 +251,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       body: JSON.stringify({ refresh_token: account.refresh_token }),
     });
     if (!response.ok) return null;
-    const next = (await response.json()) as Account;
+    const result = await response.json();
+    if (!isAccount(result)) return null;
+    const next = result;
     saveAccount(next);
     return next;
   }, [account, saveAccount]);
@@ -218,7 +296,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const switchAccount = (userId: string) => {
-    window.localStorage.setItem(ACTIVE_KEY, userId);
+    safeSetLocalStorage(ACTIVE_KEY, userId);
     window.location.href = "/";
   };
 
@@ -259,6 +337,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 export function useAuth() {
   const context = useContext(AuthContext);
-  if (!context) throw new Error("useAuth must be used inside AuthProvider");
+  if (!context) throw new Error("请在认证提供器内使用账号上下文");
   return context;
 }

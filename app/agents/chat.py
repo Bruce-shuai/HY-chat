@@ -28,7 +28,7 @@ from langchain.agents.middleware import (
     ModelResponse,
     ToolCallRequest,
 )
-from langchain.messages import AIMessage
+from langchain.messages import AIMessage, ToolMessage
 from langchain_core.messages import BaseMessage
 from langgraph.graph import END, START, StateGraph
 from langgraph.runtime import Runtime
@@ -42,6 +42,7 @@ from app.db.models import Conversation, TraceSpan
 from app.db.session import SessionLocal
 from app.models.catalog import get_chat_model, resolve_model
 from app.policies.service import (
+    PolicyViolation,
     enforce_model,
     enforce_tool,
     record_token_usage,
@@ -61,29 +62,34 @@ class ChatState(AgentState):
     conversation_id: NotRequired[str]
 
 
-SYSTEM_PROMPT = f"""你是 HY-chat，一个具备通用对话、RAG 知识库检索、代码分析、联网搜索、天气查询和股票查询能力的 AI 助手。
+SYSTEM_PROMPT = f"""你是 HY-chat，一个具备通用对话、知识库检索、代码分析、图片生成、联网搜索、天气查询和股票查询能力的智能助手。
 
 当前日期：{date.today().isoformat()}。
 
 工具使用规则：
 1. 用户询问上传文档或知识库内容时，先调用 search_knowledge_base，并引用文件名及页码、幻灯片或工作表信息。
 2. 用户询问代码项目时，先使用工作区工具读取真实文件，不要编造未读取的内容。
-3. 用户询问最新信息或明确要求联网时，使用 web_search，并在回答中提供来源链接。
-4. 天气问题使用 get_weather；股票行情使用 get_stock_quote，并明确行情可能延迟且不构成投资建议。
-5. 工具返回错误时，清楚说明缺少的配置或外部服务问题，不要虚构结果。
+3. 用户要求生成图片、画图、制作海报或视觉创意时，使用 generate_image。工具返回 image_url 或 markdown 后，最终回复必须用 Markdown 图片语法展示图片，并简短说明可以继续调整风格、构图或尺寸；不要改口说自己没有图片生成能力。
+4. 用户询问最新信息或明确要求联网时，使用 web_search，并在回答中提供来源链接。
+5. 天气问题使用 get_weather；股票行情使用 get_stock_quote，并明确行情可能延迟且不构成投资建议。用户用中文名称查询股票或指数时，先传入常见名称或对应代码，例如：标普500/S&P500 用 SPY，纳斯达克100/纳指用 QQQ，道琼斯/道指用 DIA。
+6. 工具返回错误时，清楚说明缺少的配置或外部服务问题，不要虚构结果。
 
 默认使用中文回复，除非用户明确要求其他语言。
 """
 
 
 HITL_TOOL_CONFIG: dict[str, InterruptOnConfig] = {
+    "generate_image": {
+        "allowed_decisions": ["approve", "edit", "reject"],
+        "description": "即将生成图片，请确认图片描述和尺寸。",
+    },
     "web_search": {
         "allowed_decisions": ["approve", "edit", "reject"],
         "description": "即将联网搜索，请确认搜索关键词和结果数量。",
     },
     "get_stock_quote": {
         "allowed_decisions": ["approve", "edit", "reject"],
-        "description": "即将访问外部股票行情服务，请确认股票代码。",
+        "description": "即将访问外部股票行情服务，请确认股票代码或指数名称。",
     },
 }
 
@@ -187,6 +193,32 @@ def _tool_error_message(result: object) -> str | None:
     if status == "error":
         return str(content)[:2_000] or "Tool call failed"
     return None
+
+
+def _tool_failure_message(request: ToolCallRequest, message: str) -> ToolMessage:
+    tool_name = str(request.tool_call.get("name") or "unknown")
+    tool_call_id = str(request.tool_call.get("id") or uuid.uuid4())
+    return ToolMessage(
+        content=json.dumps({"error": message}, ensure_ascii=False),
+        tool_call_id=tool_call_id,
+        name=tool_name,
+    )
+
+
+def _policy_violation_response(message: str) -> ModelResponse:
+    if message.startswith("请求过于频繁"):
+        content = (
+            "发送太频繁了。\n\n"
+            f"{message}。请稍等一分钟后再继续发送。"
+        )
+    elif "本月标记配额已用尽" in message:
+        content = "本月额度已用尽。\n\n当前账号的本月标记配额已经用完，请联系管理员调整额度后再继续使用。"
+    elif message.startswith("当前账号无权使用模型"):
+        content = f"当前账号没有这个模型的使用权限。\n\n{message}。请切换其他模型，或联系管理员开通权限。"
+    else:
+        content = f"当前请求被权限策略拦截。\n\n原因：{message}"
+
+    return ModelResponse(result=[AIMessage(content=content)])
 
 
 def _token_usage(response: ModelResponse) -> tuple[int, int, int]:
@@ -352,11 +384,18 @@ class PolicyTraceMiddleware(AgentMiddleware):
 
     def wrap_model_call(self, request: ModelRequest, handler):
         started = time.perf_counter()
-        overridden, db, user_id, trace = self._prepare_model_call(request)
+        try:
+            overridden, db, user_id, trace = self._prepare_model_call(request)
+        except PolicyViolation as exc:
+            logger.warning("Model call blocked by policy: %s", exc)
+            return _policy_violation_response(str(exc))
         try:
             response = handler(overridden)
             self._finish_model_call(db, user_id, trace, response, started)
             return response
+        except PolicyViolation as exc:
+            self._fail_trace(db, trace, exc, started)
+            return _policy_violation_response(str(exc))
         except Exception as exc:
             self._fail_trace(db, trace, exc, started)
             raise
@@ -365,11 +404,18 @@ class PolicyTraceMiddleware(AgentMiddleware):
 
     async def awrap_model_call(self, request: ModelRequest, handler):
         started = time.perf_counter()
-        overridden, db, user_id, trace = self._prepare_model_call(request)
+        try:
+            overridden, db, user_id, trace = self._prepare_model_call(request)
+        except PolicyViolation as exc:
+            logger.warning("Model call blocked by policy: %s", exc)
+            return _policy_violation_response(str(exc))
         try:
             response = await handler(overridden)
             self._finish_model_call(db, user_id, trace, response, started)
             return response
+        except PolicyViolation as exc:
+            self._fail_trace(db, trace, exc, started)
+            return _policy_violation_response(str(exc))
         except Exception as exc:
             self._fail_trace(db, trace, exc, started)
             raise
@@ -442,29 +488,45 @@ class PolicyTraceMiddleware(AgentMiddleware):
 
     def wrap_tool_call(self, request: ToolCallRequest, handler):
         started = time.perf_counter()
-        db, trace = self._prepare_tool_call(request)
+        db = None
+        trace = None
         try:
+            db, trace = self._prepare_tool_call(request)
             result = handler(request)
             self._finish_tool_call(db, trace, result, started)
             return result
+        except PolicyViolation as exc:
+            if db:
+                self._fail_trace(db, trace, exc, started)
+            return _tool_failure_message(request, str(exc))
         except Exception as exc:
-            self._fail_trace(db, trace, exc, started)
+            if db:
+                self._fail_trace(db, trace, exc, started)
             raise
         finally:
-            db.close()
+            if db:
+                db.close()
 
     async def awrap_tool_call(self, request: ToolCallRequest, handler):
         started = time.perf_counter()
-        db, trace = self._prepare_tool_call(request)
+        db = None
+        trace = None
         try:
+            db, trace = self._prepare_tool_call(request)
             result = await handler(request)
             self._finish_tool_call(db, trace, result, started)
             return result
+        except PolicyViolation as exc:
+            if db:
+                self._fail_trace(db, trace, exc, started)
+            return _tool_failure_message(request, str(exc))
         except Exception as exc:
-            self._fail_trace(db, trace, exc, started)
+            if db:
+                self._fail_trace(db, trace, exc, started)
             raise
         finally:
-            db.close()
+            if db:
+                db.close()
 
 
 def _build_mock_graph():
@@ -476,9 +538,9 @@ def _build_mock_graph():
         selected = state.get("selected_model") or settings.zhipu_chat_model
         message = AIMessage(
             content=(
-                "【Mock 模型输出】\n\n"
-                f"当前模型：`{selected}`。HY-chat 的聊天链路已连接成功。配置 `ZHIPU_API_KEY` 后即可"
-                "使用真实模型、Tool Calling 与 RAG 回答。\n\n"
+                "【模拟模型输出】\n\n"
+                f"当前模型：`{selected}`。HY-chat 的聊天链路已连接成功。配置真实模型密钥后即可"
+                "使用真实模型、工具调用与知识库检索回答。\n\n"
                 f"你刚才发送的是：{content}"
             )
         )
