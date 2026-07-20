@@ -242,6 +242,11 @@ export function Thread() {
     }
   }, [stream.error]);
 
+  const runError =
+    stream.error && !isAlreadyConsumedInterruptError(stream.error)
+      ? stream.error
+      : undefined;
+
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (
@@ -426,6 +431,7 @@ export function Thread() {
                   hasNoAIOrToolMessages={hasNoAIOrToolMessages}
                   isThreadLoading={isThreadLoading}
                   isRunLoading={isLoading}
+                  runError={runError}
                   messages={visibleMessages}
                   resetKey={messageListResetKey}
                   threadId={threadId}

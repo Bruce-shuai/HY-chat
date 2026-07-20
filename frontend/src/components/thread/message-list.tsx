@@ -4,7 +4,11 @@ import { AlertTriangle, LoaderCircle } from "lucide-react";
 import { DO_NOT_RENDER_ID_PREFIX } from "@/lib/ensure-tool-responses";
 import { Button } from "../ui/button";
 import { LocalErrorBoundary } from "./thread-error-boundary";
-import { AssistantMessage, AssistantMessageLoading } from "./messages/ai";
+import {
+  AssistantMessage,
+  AssistantMessageFailure,
+  AssistantMessageLoading,
+} from "./messages/ai";
 import { HumanMessage } from "./messages/human";
 
 type MessageListErrorFallbackProps = {
@@ -20,6 +24,7 @@ type ThreadMessageListProps = {
   hasNoAIOrToolMessages: boolean;
   isThreadLoading: boolean;
   isRunLoading: boolean;
+  runError?: unknown;
   messages: BaseMessage[];
   resetKey: string;
   threadId: string | null;
@@ -79,6 +84,7 @@ function MessageItems({
   hasInterrupt,
   hasNoAIOrToolMessages,
   isRunLoading,
+  runError,
   messages,
   onRegenerate,
 }: Pick<
@@ -87,29 +93,40 @@ function MessageItems({
   | "hasInterrupt"
   | "hasNoAIOrToolMessages"
   | "isRunLoading"
+  | "runError"
   | "messages"
   | "onRegenerate"
 >) {
+  const renderableMessages = messages.filter(
+    (message) => !message.id?.startsWith(DO_NOT_RENDER_ID_PREFIX),
+  );
+  const lastMessage = renderableMessages[renderableMessages.length - 1];
+  const shouldShowRunFailure =
+    Boolean(runError) &&
+    !isRunLoading &&
+    !hasInterrupt &&
+    !!lastMessage &&
+    isHumanMessage(lastMessage);
+
   return (
     <>
-      {messages
-        .filter((message) => !message.id?.startsWith(DO_NOT_RENDER_ID_PREFIX))
-        .map((message, index) =>
-          isHumanMessage(message) ? (
-            <HumanMessage
-              key={message.id || `${message.type}-${index}`}
-              message={message}
-              isLoading={isRunLoading}
-            />
-          ) : (
-            <AssistantMessage
-              key={message.id || `${message.type}-${index}`}
-              message={message}
-              isLoading={isRunLoading}
-              handleRegenerate={onRegenerate}
-            />
-          ),
-        )}
+      {renderableMessages.map((message, index) =>
+        isHumanMessage(message) ? (
+          <HumanMessage
+            key={message.id || `${message.type}-${index}`}
+            message={message}
+            isLoading={isRunLoading}
+          />
+        ) : (
+          <AssistantMessage
+            key={message.id || `${message.type}-${index}`}
+            message={message}
+            isLoading={isRunLoading}
+            handleRegenerate={onRegenerate}
+          />
+        ),
+      )}
+      {shouldShowRunFailure && <AssistantMessageFailure error={runError} />}
       {hasNoAIOrToolMessages && hasInterrupt && (
         <AssistantMessage
           key="interrupt-msg"
@@ -129,6 +146,7 @@ export function ThreadMessageList({
   hasNoAIOrToolMessages,
   isThreadLoading,
   isRunLoading,
+  runError,
   messages,
   resetKey,
   threadId,
@@ -157,6 +175,7 @@ export function ThreadMessageList({
           hasInterrupt={hasInterrupt}
           hasNoAIOrToolMessages={hasNoAIOrToolMessages}
           isRunLoading={isRunLoading}
+          runError={runError}
           messages={messages}
           onRegenerate={onRegenerate}
         />

@@ -4,6 +4,7 @@ import shlex
 import subprocess
 from pathlib import Path
 
+from app.core.admin_contact import append_admin_contact
 from app.core.config import get_settings
 from app.core.types import JsonObject
 from app.tools.file_tools import safe_path
@@ -36,7 +37,7 @@ def run_command(command: str, cwd: str, timeout_seconds: int = 30) -> JsonObject
     if not settings.enable_command_tool:
         return {
             "status": "disabled",
-            "message": "命令执行工具未启用，请联系管理员开启。",
+            "message": append_admin_contact("命令执行工具未启用，请联系管理员开启。"),
         }
 
     args = shlex.split(command)

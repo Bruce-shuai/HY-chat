@@ -15,6 +15,7 @@ import { AccountMenu } from "@/components/auth/AccountMenu";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AuthUser, useAuth } from "@/providers/Auth";
+import { ADMIN_CONTACT_TEXT } from "@/lib/admin-contact";
 
 type Stats = {
   users: number;
@@ -51,6 +52,7 @@ function AdminContent() {
     return (
       <div className="flex min-h-dvh flex-col items-center justify-center gap-4">
         <p>需要管理员权限。</p>
+        <p className="text-muted-foreground text-sm">{ADMIN_CONTACT_TEXT}</p>
         <Link href="/">
           <Button>返回聊天</Button>
         </Link>

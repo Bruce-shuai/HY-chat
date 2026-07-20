@@ -8,6 +8,7 @@ from sqlalchemy import update
 from sqlalchemy.orm import Session
 
 from app.cache.service import redis
+from app.core.admin_contact import append_admin_contact
 from app.core.types import UserRole
 from app.db.models import User, UserPolicy
 from app.models.catalog import normalize_model_allowlist
@@ -129,5 +130,7 @@ def enforce_tool(db: Session, user_id: str, tool_name: str) -> None:
     if tool_name in HIGH_COST_TOOLS and not policy.allow_high_cost_tools:
         label = TOOL_LABELS.get(tool_name, tool_name)
         raise PolicyViolation(
-            f"已被高成本工具权限拦截：当前账号暂未开通{label}，请联系管理员开启后再试"
+            append_admin_contact(
+                f"已被高成本工具权限拦截：当前账号暂未开通{label}，请联系管理员开启后再试"
+            )
         )

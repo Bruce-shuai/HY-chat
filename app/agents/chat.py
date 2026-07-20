@@ -35,6 +35,7 @@ from langgraph.runtime import Runtime
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.admin_contact import append_admin_contact
 from app.core.config import get_settings
 from app.core.logging import configure_logging
 from app.core.types import JsonObject
@@ -212,11 +213,15 @@ def _policy_violation_response(message: str) -> ModelResponse:
             f"{message}。请稍等一分钟后再继续发送。"
         )
     elif "本月标记配额已用尽" in message:
-        content = "本月额度已用尽。\n\n当前账号的本月标记配额已经用完，请联系管理员调整额度后再继续使用。"
+        content = append_admin_contact(
+            "本月额度已用尽。\n\n当前账号的本月标记配额已经用完，请联系管理员调整额度后再继续使用。"
+        )
     elif message.startswith("当前账号无权使用模型"):
-        content = f"当前账号没有这个模型的使用权限。\n\n{message}。请切换其他模型，或联系管理员开通权限。"
+        content = append_admin_contact(
+            f"当前账号没有这个模型的使用权限。\n\n{message}。请切换其他模型，或联系管理员开通权限。"
+        )
     else:
-        content = f"当前请求被权限策略拦截。\n\n原因：{message}"
+        content = append_admin_contact(f"当前请求被权限策略拦截。\n\n原因：{message}")
 
     return ModelResponse(result=[AIMessage(content=content)])
 

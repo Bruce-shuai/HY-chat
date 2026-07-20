@@ -1,3 +1,5 @@
+import { appendAdminContact } from "./admin-contact";
+
 export function getErrorMessage(error: unknown): string {
   if (error instanceof Error) {
     return error.message;
@@ -93,21 +95,21 @@ export function getKnownStreamErrorInfo(
     return {
       kind: "high-cost-tool",
       title: "高成本工具已被拦截",
-      description: policyMessage,
+      description: appendAdminContact(policyMessage),
     };
   }
   if (policyMessage?.startsWith("当前账号")) {
     return {
       kind: "model-permission",
       title: "当前账号没有权限",
-      description: policyMessage,
+      description: appendAdminContact(policyMessage),
     };
   }
   if (policyMessage?.includes("本月标记配额已用尽")) {
     return {
       kind: "quota",
       title: "本月额度已用尽",
-      description: policyMessage,
+      description: appendAdminContact(policyMessage),
     };
   }
 

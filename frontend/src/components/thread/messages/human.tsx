@@ -9,6 +9,7 @@ import { CommandBar } from "./shared";
 import { MultimodalPreview } from "@/components/thread/MultimodalPreview";
 import { isBase64ContentBlock } from "@/lib/multimodal-utils";
 import { MarkdownText } from "../markdown-text";
+import { MessageTimestamp } from "./timestamp";
 
 function EditableContent({
   value,
@@ -113,6 +114,14 @@ export function HumanMessage({
               )
             ) : null}
           </div>
+        )}
+
+        {!isEditing && (
+          <MessageTimestamp
+            message={message}
+            metadata={meta}
+            align="right"
+          />
         )}
 
         <div

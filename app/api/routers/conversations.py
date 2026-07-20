@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_user
+from app.core.admin_contact import append_admin_contact
 from app.db.models import Conversation, User
 from app.db.session import get_db
 from app.models.catalog import normalize_model_allowlist, resolve_model
@@ -61,7 +62,10 @@ def _apply_update(
         if values["selected_model"] not in normalize_model_allowlist(
             user.policy.allowed_models
         ):
-            raise HTTPException(status_code=403, detail="当前账号无权使用该模型")
+            raise HTTPException(
+                status_code=403,
+                detail=append_admin_contact("当前账号无权使用该模型。"),
+            )
     for key, value in values.items():
         setattr(row, key, value)
     row.updated_at = datetime.utcnow()
@@ -78,7 +82,10 @@ def create_conversation(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if selected not in normalize_model_allowlist(user.policy.allowed_models):
-        raise HTTPException(status_code=403, detail="当前账号无权使用该模型")
+        raise HTTPException(
+            status_code=403,
+            detail=append_admin_contact("当前账号无权使用该模型。"),
+        )
     row = Conversation(
         user_id=user.id,
         thread_id=str(uuid.uuid4()),

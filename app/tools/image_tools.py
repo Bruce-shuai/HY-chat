@@ -5,6 +5,7 @@ import logging
 import httpx
 from langchain.tools import tool
 
+from app.core.admin_contact import append_admin_contact
 from app.core.config import get_settings
 from app.core.types import JsonObject
 from app.tracing.service import safe_json
@@ -60,10 +61,18 @@ def generate_image(prompt: str, size: str = "1280x1280") -> dict[str, object]:
     normalized_size = _normalize_size(size)
 
     if not settings.image_generation_enabled:
-        return {"error": "图片生成暂未开启，请联系管理员开启后再试。"}
+        return {
+            "error": append_admin_contact(
+                "图片生成暂未开启，请联系管理员开启后再试。"
+            )
+        }
     if not settings.zhipu_api_key:
         logger.warning("Image generation is not configured")
-        return {"error": "图片生成尚未配置，请联系管理员配置图片生成服务。"}
+        return {
+            "error": append_admin_contact(
+                "图片生成尚未配置，请联系管理员配置图片生成服务。"
+            )
+        }
     if not clean_prompt:
         return {"error": "请先提供图片描述。"}
     if len(clean_prompt) > GLM_IMAGE_PROMPT_MAX_CHARS:

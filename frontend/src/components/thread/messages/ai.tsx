@@ -22,6 +22,9 @@ import { prettifyText } from "../agent-inbox/utils";
 import { useQueryState, parseAsBoolean } from "nuqs";
 import { GenericInterruptView } from "./generic-interrupt";
 import { useArtifact } from "../artifact";
+import { MessageTimestamp } from "./timestamp";
+import { getKnownStreamErrorInfo } from "@/lib/stream-errors";
+import { AlertTriangle } from "lucide-react";
 
 function CustomComponent({
   message,
@@ -157,9 +160,21 @@ function getToolFallbackMarkdown(message: BaseMessage): string {
 }
 
 function HiddenToolResultFallback({ message }: { message: BaseMessage }) {
+  const thread = useStreamContext();
+  const meta = useMessageMetadata(thread, message.id);
+
   return (
-    <div className="py-1">
-      <MarkdownText>{getToolFallbackMarkdown(message)}</MarkdownText>
+    <div className="group mr-auto flex w-full items-start gap-2">
+      <div className="flex w-full flex-col gap-2">
+        <div className="py-1">
+          <MarkdownText>{getToolFallbackMarkdown(message)}</MarkdownText>
+        </div>
+        <MessageTimestamp
+          message={message}
+          metadata={meta}
+          align="left"
+        />
+      </div>
     </div>
   );
 }
@@ -307,6 +322,13 @@ export function AssistantMessage({
                 thread={thread}
               />
             )}
+            {message && (
+              <MessageTimestamp
+                message={message}
+                metadata={meta}
+                align="left"
+              />
+            )}
             <div
               className={cn(
                 "mr-auto flex items-center gap-2 transition-opacity",
@@ -322,6 +344,25 @@ export function AssistantMessage({
             </div>
           </>
         )}
+      </div>
+    </div>
+  );
+}
+
+export function AssistantMessageFailure({ error }: { error: unknown }) {
+  const knownError = getKnownStreamErrorInfo(error);
+
+  return (
+    <div className="group mr-auto flex w-full items-start gap-2">
+      <div className="border-destructive/20 bg-destructive/5 text-destructive flex max-w-[min(80vw,42rem)] flex-col gap-1 rounded-2xl border px-4 py-3 text-sm">
+        <div className="flex items-center gap-2 font-medium">
+          <AlertTriangle className="size-4 shrink-0" />
+          <span>{knownError?.title ?? "回答失败了"}</span>
+        </div>
+        <p className="text-destructive/80 leading-6">
+          {knownError?.description ??
+            "这次请求没有生成回答，请稍后重试，或重新发送这条消息。"}
+        </p>
       </div>
     </div>
   );

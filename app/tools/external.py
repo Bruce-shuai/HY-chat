@@ -6,6 +6,7 @@ import httpx
 from langchain.tools import tool
 
 from app.cache.service import cache
+from app.core.admin_contact import append_admin_contact
 from app.core.config import get_settings
 from app.core.constants import (
     STOCK_CACHE_TTL_SECONDS,
@@ -75,7 +76,11 @@ def web_search(query: str, max_results: int = 5) -> dict[str, object]:
 
     if not settings.tavily_api_key:
         logger.warning("External tool is not configured tool=web_search")
-        return {"error": "网页搜索尚未配置，请联系管理员配置联网搜索服务。"}
+        return {
+            "error": append_admin_contact(
+                "网页搜索尚未配置，请联系管理员配置联网搜索服务。"
+            )
+        }
     limit = max(1, min(max_results, 10))
     key = f"tool:web:{cache.digest(query, limit)}"
     if isinstance(cached := cache.get_json(key), dict):
@@ -208,7 +213,7 @@ def get_stock_quote(symbol: str) -> dict[str, object]:
 
     if not settings.alpha_vantage_api_key:
         logger.warning("External tool is not configured tool=get_stock_quote")
-        return {"error": "股票行情服务尚未配置，请联系管理员。"}
+        return {"error": append_admin_contact("股票行情服务尚未配置，请联系管理员。")}
     ticker, display_name, requested_symbol = _resolve_stock_symbol(symbol)
     if not ticker:
         return {"error": "请提供要查询的股票代码或名称。"}
