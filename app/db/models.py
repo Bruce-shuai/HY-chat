@@ -110,6 +110,34 @@ class Conversation(Base):
     )
 
 
+class UserMemory(Base):
+    __tablename__ = "user_memories"
+    __table_args__ = (
+        UniqueConstraint("user_id", "memory_key", name="uq_user_memories_user_key"),
+    )
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    user_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    memory_key: Mapped[str] = mapped_column(String(80), nullable=False)
+    memory_value: Mapped[str] = mapped_column(Text, nullable=False)
+    source_thread_id: Mapped[str | None] = mapped_column(
+        String(64), nullable=True, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+    )
+
+
 class StoredFile(Base):
     __tablename__ = "stored_files"
 

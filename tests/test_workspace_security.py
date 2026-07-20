@@ -171,7 +171,8 @@ async def test_coding_agent_run_endpoints_require_admin(monkeypatch):
 
             assert [response.status_code for response in responses] == [403, 403, 403]
             assert all(
-                response.json()["detail"] == "需要管理员权限" for response in responses
+                response.json()["detail"].startswith("需要管理员权限")
+                for response in responses
             )
             graph_call.assert_not_called()
 

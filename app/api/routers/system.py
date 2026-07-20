@@ -52,4 +52,5 @@ def cache_health():
         "available": cache.ping(),
         "backend": "redis",
         "default_ttl": settings.cache_default_ttl,
+        "chat_response_ttl": settings.chat_response_cache_ttl,
     }

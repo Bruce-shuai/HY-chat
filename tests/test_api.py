@@ -7,6 +7,7 @@ from langchain.messages import ToolMessage
 
 import app.agents.chat as agent_chat_module
 import app.api.routers.chat as chat_module
+import app.services.chat_response_cache as chat_cache_module
 from app.agents.chat import _build_mock_graph
 from app.auth.dependencies import get_current_user
 from app.db.session import get_db
@@ -25,7 +26,14 @@ async def test_system_endpoints_and_sse(monkeypatch):
     )
     monkeypatch.setattr(agent_chat_module, "SessionLocal", lambda: fake_session)
     monkeypatch.setattr(
+        agent_chat_module, "authorize_model_access", lambda *_args, **_kwargs: None
+    )
+    monkeypatch.setattr(
         agent_chat_module, "enforce_model", lambda *_args, **_kwargs: None
+    )
+    monkeypatch.setattr(chat_cache_module.cache, "get_json", lambda _key: None)
+    monkeypatch.setattr(
+        chat_cache_module.cache, "set_json", lambda *_args, **_kwargs: True
     )
     monkeypatch.setattr(chat_module, "graph", _build_mock_graph())
     monkeypatch.setattr(

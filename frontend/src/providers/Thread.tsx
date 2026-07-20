@@ -7,6 +7,7 @@ import {
   useContext,
   ReactNode,
   useCallback,
+  useEffect,
   useState,
   Dispatch,
   SetStateAction,
@@ -33,6 +34,44 @@ const ThreadContext = createContext<ThreadContextType | undefined>(undefined);
 
 function backendUrl() {
   return process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
+}
+
+const DELETED_THREADS_KEY_PREFIX = "hy-chat:deleted-threads";
+
+function deletedThreadsKey(userId?: string | null) {
+  return `${DELETED_THREADS_KEY_PREFIX}:${userId || "anonymous"}`;
+}
+
+function loadDeletedThreadIds(userId?: string | null): Set<string> {
+  if (typeof window === "undefined") return new Set();
+
+  try {
+    const raw = window.localStorage.getItem(deletedThreadsKey(userId));
+    const parsed = JSON.parse(raw || "[]");
+    return new Set(
+      Array.isArray(parsed)
+        ? parsed.filter((item): item is string => typeof item === "string")
+        : [],
+    );
+  } catch {
+    return new Set();
+  }
+}
+
+function persistDeletedThreadIds(
+  userId: string | null | undefined,
+  ids: Set<string>,
+) {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.localStorage.setItem(
+      deletedThreadsKey(userId),
+      JSON.stringify([...ids]),
+    );
+  } catch {
+    // no-op
+  }
 }
 
 function getThreadSearchMetadata(
@@ -65,7 +104,7 @@ async function readResponseError(response: Response, fallback: string) {
 }
 
 export function ThreadProvider({ children }: { children: ReactNode }) {
-  const { accessToken, authFetch } = useAuth();
+  const { accessToken, authFetch, user } = useAuth();
   const envApiUrl: string | undefined = process.env.NEXT_PUBLIC_API_URL;
   const envAssistantId: string | undefined =
     process.env.NEXT_PUBLIC_ASSISTANT_ID;
@@ -80,6 +119,13 @@ export function ThreadProvider({ children }: { children: ReactNode }) {
   });
   const [threads, setThreads] = useState<Thread[]>([]);
   const [threadsLoading, setThreadsLoading] = useState(false);
+  const [deletedThreadIds, setDeletedThreadIds] = useState<Set<string>>(() =>
+    loadDeletedThreadIds(user?.id),
+  );
+
+  useEffect(() => {
+    setDeletedThreadIds(loadDeletedThreadIds(user?.id));
+  }, [user?.id]);
 
   const getClient = useCallback(() => {
     return createClient(
@@ -101,10 +147,13 @@ export function ThreadProvider({ children }: { children: ReactNode }) {
       },
       limit: 100,
     });
+    const visibleGraphThreads = graphThreads.filter(
+      (thread) => !deletedThreadIds.has(thread.thread_id),
+    );
 
     try {
       const response = await authFetch(`${backendUrl()}/conversations`);
-      if (!response.ok) return graphThreads;
+      if (!response.ok) return visibleGraphThreads;
       const body = (await response.json()) as {
         conversations?: ConversationSummary[];
       };
@@ -114,14 +163,21 @@ export function ThreadProvider({ children }: { children: ReactNode }) {
           conversation.title,
         ]),
       );
-      return graphThreads.map((thread) => {
+      return visibleGraphThreads.map((thread) => {
         const title = titles.get(thread.thread_id);
         return title ? withThreadTitle(thread, title) : thread;
       });
     } catch {
-      return graphThreads;
+      return visibleGraphThreads;
     }
-  }, [apiUrl, assistantId, envAssistantId, getClient, authFetch]);
+  }, [
+    apiUrl,
+    assistantId,
+    envAssistantId,
+    getClient,
+    deletedThreadIds,
+    authFetch,
+  ]);
 
   const renameThread = useCallback(
     async (thread: Thread, title: string): Promise<Thread> => {
@@ -163,9 +219,6 @@ export function ThreadProvider({ children }: { children: ReactNode }) {
 
   const deleteThread = useCallback(
     async (threadId: string): Promise<void> => {
-      if (!apiUrl) throw new Error("图服务地址未配置");
-      await getClient().threads.delete(threadId);
-
       const response = await authFetch(
         `${backendUrl()}/conversations/by-thread/${encodeURIComponent(threadId)}`,
         { method: "DELETE" },
@@ -174,11 +227,24 @@ export function ThreadProvider({ children }: { children: ReactNode }) {
         throw new Error(await readResponseError(response, "后端会话删除失败"));
       }
 
+      setDeletedThreadIds((current) => {
+        const next = new Set(current);
+        next.add(threadId);
+        persistDeletedThreadIds(user?.id, next);
+        return next;
+      });
       setThreads((current) =>
         current.filter((item) => item.thread_id !== threadId),
       );
+
+      if (!apiUrl) return;
+      void getClient()
+        .threads.delete(threadId)
+        .catch((error) => {
+          console.warn("LangGraph thread 删除失败，已隐藏本地会话记录", error);
+        });
     },
-    [apiUrl, authFetch, getClient],
+    [apiUrl, authFetch, getClient, user?.id],
   );
 
   const value = {

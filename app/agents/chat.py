@@ -28,7 +28,7 @@ from langchain.agents.middleware import (
     ModelResponse,
     ToolCallRequest,
 )
-from langchain.messages import AIMessage, ToolMessage
+from langchain.messages import AIMessage, SystemMessage, ToolMessage
 from langchain_core.messages import BaseMessage
 from langgraph.graph import END, START, StateGraph
 from langgraph.runtime import Runtime
@@ -44,10 +44,23 @@ from app.db.session import SessionLocal
 from app.models.catalog import get_chat_model, resolve_model
 from app.policies.service import (
     PolicyViolation,
+    authorize_model_access,
     enforce_model,
     enforce_tool,
     record_token_usage,
     runtime_user_id,
+)
+from app.services.memory_service import (
+    build_memory_system_prompt,
+    message_to_text,
+    remember_from_messages,
+    user_memory_map,
+)
+from app.services.chat_response_cache import (
+    build_cache_key as build_chat_response_cache_key,
+    build_request_cache_key,
+    get_cached_response,
+    store_response,
 )
 from app.tools.registry import get_agent_tools
 from app.tracing.service import safe_json
@@ -208,10 +221,7 @@ def _tool_failure_message(request: ToolCallRequest, message: str) -> ToolMessage
 
 def _policy_violation_response(message: str) -> ModelResponse:
     if message.startswith("请求过于频繁"):
-        content = (
-            "发送太频繁了。\n\n"
-            f"{message}。请稍等一分钟后再继续发送。"
-        )
+        content = f"发送太频繁了。\n\n{message}。请稍等一分钟后再继续发送。"
     elif "本月标记配额已用尽" in message:
         content = append_admin_contact(
             "本月额度已用尽。\n\n当前账号的本月标记配额已经用完，请联系管理员调整额度后再继续使用。"
@@ -242,6 +252,60 @@ def _token_usage(response: ModelResponse) -> tuple[int, int, int]:
         )
         total += int(usage.get("total_tokens") or token_usage.get("total_tokens") or 0)
     return prompt, completion, total or prompt + completion
+
+
+def _append_memory_to_request(
+    request: ModelRequest,
+    db: Session,
+    user_id: str,
+    thread_id: str | None,
+) -> ModelRequest:
+    try:
+        deleted_memory_keys = remember_from_messages(
+            db,
+            user_id,
+            request.messages,
+            source_thread_id=thread_id,
+        )
+        memory_prompt = build_memory_system_prompt(
+            db,
+            user_id,
+            backfill_from_traces="profile.name" not in deleted_memory_keys,
+        )
+    except Exception:
+        logger.warning(
+            "Long-term memory unavailable user_id=%s", user_id, exc_info=True
+        )
+        return request
+    if not memory_prompt:
+        return request
+
+    if request.system_message:
+        existing = request.system_message.content
+        existing_text = existing if isinstance(existing, str) else str(existing)
+        return request.override(
+            system_message=SystemMessage(content=f"{existing_text}\n\n{memory_prompt}")
+        )
+
+    return request.override(
+        messages=[SystemMessage(content=memory_prompt), *request.messages]
+    )
+
+
+def _asks_user_name(content: object) -> bool:
+    text = _content_title(content).lower()
+    if not text:
+        return False
+    return any(
+        phrase in text
+        for phrase in (
+            "我叫什么",
+            "我的名字",
+            "我是谁",
+            "what is my name",
+            "who am i",
+        )
+    )
 
 
 def _ensure_conversation(
@@ -285,21 +349,24 @@ class PolicyTraceMiddleware(AgentMiddleware):
 
     def _prepare_model_call(
         self, request: ModelRequest
-    ) -> tuple[ModelRequest, Session, str | None, TraceSpan | None]:
+    ) -> tuple[ModelRequest, Session, str | None, TraceSpan | None, str, str | None]:
         selected = resolve_model(request.state.get("selected_model"))
         user_id = runtime_user_id(request.runtime) or request.state.get("auth_user_id")
         db = SessionLocal()
         try:
+            thread_id = _runtime_thread_id(request.runtime)
             conversation = None
             if user_id:
-                enforce_model(db, user_id, selected)
+                authorize_model_access(db, user_id, selected)
                 conversation = _ensure_conversation(
                     db,
                     user_id,
-                    _runtime_thread_id(request.runtime),
+                    thread_id,
                     request.state,
                     selected,
                 )
+                request = _append_memory_to_request(request, db, user_id, thread_id)
+            cache_key = build_request_cache_key(request, user_id, selected)
             trace = None
             if user_id:
                 trace = TraceSpan(
@@ -309,7 +376,7 @@ class PolicyTraceMiddleware(AgentMiddleware):
                         if conversation
                         else request.state.get("conversation_id")
                     ),
-                    thread_id=_runtime_thread_id(request.runtime),
+                    thread_id=thread_id,
                     run_id=str(uuid.uuid4()),
                     name=f"model:{selected}",
                     span_type="model",
@@ -322,15 +389,10 @@ class PolicyTraceMiddleware(AgentMiddleware):
             logger.info(
                 "Model call started user_id=%s thread_id=%s model=%s",
                 user_id,
-                _runtime_thread_id(request.runtime),
+                thread_id,
                 selected,
             )
-            return (
-                request.override(model=get_chat_model(selected, streaming=True)),
-                db,
-                user_id,
-                trace,
-            )
+            return request, db, user_id, trace, selected, cache_key
         except Exception:
             db.close()
             raise
@@ -342,6 +404,8 @@ class PolicyTraceMiddleware(AgentMiddleware):
         trace: TraceSpan | None,
         response: ModelResponse,
         started: float,
+        *,
+        cache_hit: bool = False,
     ) -> None:
         prompt, completion, total = _token_usage(response)
         latency_ms = int((time.perf_counter() - started) * 1000)
@@ -353,15 +417,19 @@ class PolicyTraceMiddleware(AgentMiddleware):
             trace.completion_tokens = completion
             trace.total_tokens = total
             trace.latency_ms = latency_ms
-            trace.output = {"messages": _message_preview(response.result)}
+            trace.output = {
+                "messages": _message_preview(response.result),
+                "cache_hit": cache_hit,
+            }
             trace.ended_at = datetime.utcnow()
             db.commit()
         logger.info(
-            "Model call completed user_id=%s model=%s latency_ms=%s tokens=%s",
+            "Model call completed user_id=%s model=%s latency_ms=%s tokens=%s cache_hit=%s",
             user_id,
             trace.model_name if trace else None,
             latency_ms,
             total,
+            cache_hit,
         )
 
     @staticmethod
@@ -390,13 +458,32 @@ class PolicyTraceMiddleware(AgentMiddleware):
     def wrap_model_call(self, request: ModelRequest, handler):
         started = time.perf_counter()
         try:
-            overridden, db, user_id, trace = self._prepare_model_call(request)
+            prepared, db, user_id, trace, selected, cache_key = (
+                self._prepare_model_call(request)
+            )
         except PolicyViolation as exc:
             logger.warning("Model call blocked by policy: %s", exc)
             return _policy_violation_response(str(exc))
         try:
+            if cached := get_cached_response(cache_key):
+                self._finish_model_call(
+                    db,
+                    user_id,
+                    trace,
+                    cached,
+                    started,
+                    cache_hit=True,
+                )
+                return cached
+
+            if user_id:
+                enforce_model(db, user_id, selected)
+            overridden = prepared.override(
+                model=get_chat_model(selected, streaming=True)
+            )
             response = handler(overridden)
             self._finish_model_call(db, user_id, trace, response, started)
+            store_response(cache_key, response)
             return response
         except PolicyViolation as exc:
             self._fail_trace(db, trace, exc, started)
@@ -410,13 +497,32 @@ class PolicyTraceMiddleware(AgentMiddleware):
     async def awrap_model_call(self, request: ModelRequest, handler):
         started = time.perf_counter()
         try:
-            overridden, db, user_id, trace = self._prepare_model_call(request)
+            prepared, db, user_id, trace, selected, cache_key = (
+                self._prepare_model_call(request)
+            )
         except PolicyViolation as exc:
             logger.warning("Model call blocked by policy: %s", exc)
             return _policy_violation_response(str(exc))
         try:
+            if cached := get_cached_response(cache_key):
+                self._finish_model_call(
+                    db,
+                    user_id,
+                    trace,
+                    cached,
+                    started,
+                    cache_hit=True,
+                )
+                return cached
+
+            if user_id:
+                enforce_model(db, user_id, selected)
+            overridden = prepared.override(
+                model=get_chat_model(selected, streaming=True)
+            )
             response = await handler(overridden)
             self._finish_model_call(db, user_id, trace, response, started)
+            store_response(cache_key, response)
             return response
         except PolicyViolation as exc:
             self._fail_trace(db, trace, exc, started)
@@ -539,26 +645,83 @@ def _build_mock_graph():
 
     def mock_chat(state: ChatState, runtime: Runtime) -> dict[str, object]:
         last_message = state["messages"][-1] if state["messages"] else None
-        content = getattr(last_message, "content", "")
+        content = message_to_text(last_message) if last_message else ""
         selected = state.get("selected_model") or settings.zhipu_chat_model
-        message = AIMessage(
-            content=(
-                "【模拟模型输出】\n\n"
-                f"当前模型：`{selected}`。HY-chat 的聊天链路已连接成功。配置真实模型密钥后即可"
-                "使用真实模型、工具调用与知识库检索回答。\n\n"
-                f"你刚才发送的是：{content}"
-            )
-        )
         server_user_id = runtime_user_id(runtime)
         user_id = server_user_id or state.get("auth_user_id")
+        memory_values: dict[str, str] = {}
+        thread_id = _runtime_thread_id(runtime)
+        cache_key = None
+        cache_hit = False
+        response_text = ""
         if user_id:
             db = SessionLocal()
             try:
-                enforce_model(db, user_id, selected)
+                authorize_model_access(db, user_id, selected)
+                try:
+                    deleted_memory_keys = remember_from_messages(
+                        db,
+                        user_id,
+                        state["messages"],
+                        source_thread_id=thread_id,
+                    )
+                    memory_values = user_memory_map(
+                        db,
+                        user_id,
+                        backfill_from_traces="profile.name" not in deleted_memory_keys,
+                    )
+                except Exception:
+                    logger.warning(
+                        "Long-term memory unavailable user_id=%s",
+                        user_id,
+                        exc_info=True,
+                    )
+                cache_key = build_chat_response_cache_key(
+                    user_id,
+                    selected,
+                    state["messages"],
+                    extra_context={"memory": memory_values},
+                )
+                cached_response = get_cached_response(cache_key)
+                if cached_response:
+                    response_text = str(cached_response.result[0].content)
+                    cache_hit = True
+                else:
+                    enforce_model(db, user_id, selected)
+            finally:
+                db.close()
+
+        if cache_hit:
+            pass
+        elif memory_values.get("profile.name") and _asks_user_name(content):
+            response_text = (
+                "【模拟模型输出】\n\n"
+                f"你叫{memory_values['profile.name']}。这是根据同一账号的长期记忆回答的。"
+            )
+        else:
+            memory_text = (
+                f"\n\n长期记忆：用户姓名是 {memory_values['profile.name']}。"
+                if memory_values.get("profile.name")
+                else ""
+            )
+            response_text = (
+                "【模拟模型输出】\n\n"
+                f"当前模型：`{selected}`。HY-chat 的聊天链路已连接成功。配置真实模型密钥后即可"
+                "使用真实模型、工具调用与知识库检索回答。"
+                f"{memory_text}\n\n"
+                f"你刚才发送的是：{content}"
+            )
+        message = AIMessage(
+            content=response_text,
+            response_metadata={"cache_hit": True} if cache_hit else {},
+        )
+        if user_id:
+            db = SessionLocal()
+            try:
                 conversation = _ensure_conversation(
                     db,
                     user_id,
-                    _runtime_thread_id(runtime),
+                    thread_id,
                     state,
                     selected,
                 )
@@ -570,14 +733,17 @@ def _build_mock_graph():
                             if conversation
                             else state.get("conversation_id")
                         ),
-                        thread_id=_runtime_thread_id(runtime),
+                        thread_id=thread_id,
                         run_id=str(uuid.uuid4()),
                         name=f"model:{selected}:mock",
                         span_type="model",
                         status="success",
                         model_name=selected,
                         input={"messages": _message_preview(state["messages"])},
-                        output={"messages": _message_preview([message])},
+                        output={
+                            "messages": _message_preview([message]),
+                            "cache_hit": cache_hit,
+                        },
                         latency_ms=0,
                         ended_at=datetime.utcnow(),
                     )
@@ -585,6 +751,8 @@ def _build_mock_graph():
                 db.commit()
             finally:
                 db.close()
+        if not cache_hit:
+            store_response(cache_key, ModelResponse(result=[message]))
         return {
             "selected_model": selected,
             "messages": [message],

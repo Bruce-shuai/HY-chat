@@ -137,19 +137,12 @@ function buildStreamSessionKey({
   apiUrl,
   assistantId,
   authScheme,
-  threadId,
 }: {
   apiUrl?: string;
   assistantId?: string;
   authScheme?: string;
-  threadId: string | null;
 }) {
-  return [
-    apiUrl ?? "",
-    assistantId ?? "",
-    authScheme ?? "",
-    threadId ?? "new-thread",
-  ].join(":");
+  return [apiUrl ?? "", assistantId ?? "", authScheme ?? ""].join(":");
 }
 
 export const StreamProvider: React.FC<{ children: ReactNode }> = ({
@@ -172,7 +165,6 @@ export const StreamProvider: React.FC<{ children: ReactNode }> = ({
   const [authScheme, setAuthScheme] = useQueryState("authScheme", {
     defaultValue: envAuthScheme || "",
   });
-  const [threadId] = useQueryState("threadId");
   const [isAgentBuilder, setIsAgentBuilder] = useState(
     () =>
       (authScheme || envAuthScheme || "").toLowerCase() ===
@@ -202,7 +194,6 @@ export const StreamProvider: React.FC<{ children: ReactNode }> = ({
     apiUrl: finalApiUrl,
     assistantId: finalAssistantId,
     authScheme: finalAuthScheme,
-    threadId,
   });
 
   // Show the form if we: don't have an API URL, or don't have an assistant ID

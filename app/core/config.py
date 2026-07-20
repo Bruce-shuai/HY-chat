@@ -73,6 +73,7 @@ class Settings(BaseSettings):
 
     cache_enabled: bool = Field(default=True, alias="CACHE_ENABLED")
     cache_default_ttl: int = Field(default=600, alias="CACHE_DEFAULT_TTL")
+    chat_response_cache_ttl: int = Field(default=600, alias="CHAT_RESPONSE_CACHE_TTL")
     cache_embedding_ttl: int = Field(default=604800, alias="CACHE_EMBEDDING_TTL")
 
     rag_upload_dir: str = Field(default="/data/rag/uploads", alias="RAG_UPLOAD_DIR")

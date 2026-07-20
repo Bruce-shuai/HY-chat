@@ -129,12 +129,16 @@ async def stream_chat(
                 content_parts.append(content)
                 yield _sse("token", {"content": content})
             if request.use_cache and content:
-                cache.set_json(cache_key, {"content": content}, ttl=600)
+                cache.set_json(
+                    cache_key,
+                    {"content": content},
+                    ttl=settings.chat_response_cache_ttl,
+                )
             yield _sse(
                 "done",
                 {"model": model, "cache_hit": False, "request_id": request_id},
             )
-        except Exception as exc:
+        except Exception:
             logger.exception(
                 "Chat stream failed request_id=%s user_id=%s model=%s",
                 request_id,

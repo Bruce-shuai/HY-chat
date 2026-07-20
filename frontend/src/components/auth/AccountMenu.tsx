@@ -1,7 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { Activity, Files, LogOut, Shield, UserRound } from "lucide-react";
+import {
+  Activity,
+  Code2,
+  Files,
+  LogOut,
+  Shield,
+  UserRound,
+} from "lucide-react";
 import { useAuth } from "@/providers/Auth";
 import { ThemeToggle } from "@/components/theme-toggle";
 
@@ -57,12 +64,20 @@ export function AccountMenu() {
           <Files className="size-4" /> 文件存储
         </Link>
         {user.role === "admin" && (
-          <Link
-            href="/admin"
-            className="hover:bg-accent flex items-center gap-2 rounded-lg px-3 py-2 text-sm"
-          >
-            <Shield className="size-4" /> 后台管理
-          </Link>
+          <>
+            <Link
+              href="/coding-agent"
+              className="hover:bg-accent flex items-center gap-2 rounded-lg px-3 py-2 text-sm"
+            >
+              <Code2 className="size-4" /> Coding Agent
+            </Link>
+            <Link
+              href="/admin"
+              className="hover:bg-accent flex items-center gap-2 rounded-lg px-3 py-2 text-sm"
+            >
+              <Shield className="size-4" /> 后台管理
+            </Link>
+          </>
         )}
         <button
           onClick={logout}
