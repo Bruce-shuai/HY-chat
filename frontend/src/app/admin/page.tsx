@@ -2,8 +2,11 @@
 
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useState } from "react";
+import { toast } from "sonner";
 import {
+  AlertCircle,
   ArrowLeft,
+  CheckCircle2,
   Files,
   MessageSquare,
   Shield,
@@ -14,6 +17,7 @@ import { AuthBoundary } from "@/components/auth/AuthBoundary";
 import { AccountMenu } from "@/components/auth/AccountMenu";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Toaster } from "@/components/ui/sonner";
 import { AuthUser, useAuth } from "@/providers/Auth";
 import { ADMIN_CONTACT_TEXT } from "@/lib/admin-contact";
 
@@ -25,11 +29,23 @@ type Stats = {
   trace_spans: number;
 };
 
+type RowFeedback = {
+  type: "success" | "error";
+  text: string;
+};
+
+function getResponseMessage(detail: unknown, fallback: string) {
+  return typeof detail === "string" && detail.trim() ? detail : fallback;
+}
+
 function AdminContent() {
   const { user, authFetch } = useAuth();
   const [users, setUsers] = useState<AuthUser[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [message, setMessage] = useState("");
+  const [rowFeedback, setRowFeedback] = useState<Record<string, RowFeedback>>(
+    {},
+  );
   const [savingUserId, setSavingUserId] = useState<string | null>(null);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const backend =
@@ -64,6 +80,11 @@ function AdminContent() {
     event.preventDefault();
     setSavingUserId(target.id);
     setMessage("");
+    setRowFeedback((current) => {
+      const next = { ...current };
+      delete next[target.id];
+      return next;
+    });
     try {
       const form = new FormData(event.currentTarget);
       const userResponse = await authFetch(
@@ -79,7 +100,18 @@ function AdminContent() {
       );
       const userResult = await userResponse.json().catch(() => null);
       if (!userResponse.ok) {
-        setMessage(userResult?.detail || "账号信息保存失败");
+        const errorMessage = getResponseMessage(
+          userResult?.detail,
+          "账号信息保存失败",
+        );
+        setMessage(errorMessage);
+        setRowFeedback((current) => ({
+          ...current,
+          [target.id]: { type: "error", text: errorMessage },
+        }));
+        toast.error("保存失败", {
+          description: errorMessage,
+        });
         return;
       }
 
@@ -101,7 +133,18 @@ function AdminContent() {
       );
       const policyResult = await policyResponse.json().catch(() => null);
       if (!policyResponse.ok) {
-        setMessage(policyResult?.detail || "智能权限保存失败");
+        const errorMessage = getResponseMessage(
+          policyResult?.detail,
+          "智能权限保存失败",
+        );
+        setMessage(errorMessage);
+        setRowFeedback((current) => ({
+          ...current,
+          [target.id]: { type: "error", text: errorMessage },
+        }));
+        toast.error("保存失败", {
+          description: errorMessage,
+        });
         return;
       }
 
@@ -109,7 +152,25 @@ function AdminContent() {
       setUsers((current) =>
         current.map((item) => (item.id === saved.id ? saved : item)),
       );
-      setMessage(`已保存 ${saved.display_name} 的设置`);
+      const successMessage = `已保存 ${saved.display_name} 的设置`;
+      setMessage(successMessage);
+      setRowFeedback((current) => ({
+        ...current,
+        [target.id]: { type: "success", text: "已保存" },
+      }));
+      toast.success("保存成功", {
+        description: successMessage,
+      });
+    } catch {
+      const errorMessage = "保存失败，请检查网络后稍后再试。";
+      setMessage(errorMessage);
+      setRowFeedback((current) => ({
+        ...current,
+        [target.id]: { type: "error", text: errorMessage },
+      }));
+      toast.error("保存失败", {
+        description: errorMessage,
+      });
     } finally {
       setSavingUserId(null);
     }
@@ -125,17 +186,36 @@ function AdminContent() {
     }
     setDeletingUserId(target.id);
     setMessage("");
+    setRowFeedback((current) => {
+      const next = { ...current };
+      delete next[target.id];
+      return next;
+    });
     try {
       const response = await authFetch(`${backend}/admin/users/${target.id}`, {
         method: "DELETE",
       });
       if (!response.ok) {
         const error = await response.json().catch(() => null);
-        setMessage(error?.detail || "删除失败");
+        const errorMessage = getResponseMessage(error?.detail, "删除失败");
+        setMessage(errorMessage);
+        toast.error("删除失败", {
+          description: errorMessage,
+        });
         return;
       }
-      setMessage(`已删除成员“${target.display_name}”`);
+      const successMessage = `已删除成员“${target.display_name}”`;
+      setMessage(successMessage);
+      toast.success("删除成功", {
+        description: successMessage,
+      });
       await load();
+    } catch {
+      const errorMessage = "删除失败，请检查网络后稍后再试。";
+      setMessage(errorMessage);
+      toast.error("删除失败", {
+        description: errorMessage,
+      });
     } finally {
       setDeletingUserId(null);
     }
@@ -183,116 +263,138 @@ function AdminContent() {
           )}
         </div>
         <section className="mt-3 space-y-3">
-          {users.map((item) => (
-            <form
-              key={[
-                item.id,
-                item.role,
-                item.is_active,
-                item.policy.rpm_limit,
-                item.policy.monthly_token_quota,
-                item.policy.allow_high_cost_tools,
-                item.policy.allowed_models.join("|"),
-              ].join(":")}
-              onSubmit={(event) => save(event, item)}
-              className="bg-background rounded-2xl border p-4 sm:p-5"
-            >
-              <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <h3 className="font-medium">{item.display_name}</h3>
-                  <p className="text-muted-foreground text-xs">{item.email}</p>
+          {users.map((item) => {
+            const feedback = rowFeedback[item.id];
+            return (
+              <form
+                key={[
+                  item.id,
+                  item.role,
+                  item.is_active,
+                  item.policy.rpm_limit,
+                  item.policy.monthly_token_quota,
+                  item.policy.allow_high_cost_tools,
+                  item.policy.allowed_models.join("|"),
+                ].join(":")}
+                onSubmit={(event) => save(event, item)}
+                className="bg-background rounded-2xl border p-4 sm:p-5"
+              >
+                <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h3 className="font-medium">{item.display_name}</h3>
+                    <p className="text-muted-foreground text-xs">
+                      {item.email}
+                    </p>
+                  </div>
+                  <span className="bg-muted rounded-full px-2.5 py-1 text-xs">
+                    已用 {item.policy.tokens_used.toLocaleString()} 个标记
+                  </span>
                 </div>
-                <span className="bg-muted rounded-full px-2.5 py-1 text-xs">
-                  已用 {item.policy.tokens_used.toLocaleString()} 个标记
-                </span>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                <label className="text-muted-foreground text-xs">
-                  角色
-                  <select
-                    name="role"
-                    defaultValue={item.role}
-                    className="bg-background mt-1 h-9 w-full rounded-md border px-2 text-sm"
-                  >
-                    <option value="user">普通用户</option>
-                    <option value="admin">管理员</option>
-                  </select>
-                </label>
-                <label className="text-muted-foreground text-xs">
-                  每分钟请求数
-                  <Input
-                    name="rpm"
-                    type="number"
-                    defaultValue={item.policy.rpm_limit}
-                    className="mt-1"
-                  />
-                </label>
-                <label className="text-muted-foreground text-xs">
-                  月标记配额
-                  <Input
-                    name="quota"
-                    type="number"
-                    defaultValue={item.policy.monthly_token_quota}
-                    className="mt-1"
-                  />
-                </label>
-                <label className="text-muted-foreground text-xs sm:col-span-2 lg:col-span-1">
-                  允许模型
-                  <Input
-                    name="models"
-                    defaultValue={item.policy.allowed_models.join(", ")}
-                    className="mt-1"
-                  />
-                </label>
-              </div>
-              <div className="mt-4 flex flex-wrap items-center gap-4 text-sm">
-                <label>
-                  <input
-                    name="is_active"
-                    type="checkbox"
-                    defaultChecked={item.is_active}
-                    className="mr-2"
-                  />
-                  账号启用
-                </label>
-                <label>
-                  <input
-                    name="high_cost"
-                    type="checkbox"
-                    defaultChecked={item.policy.allow_high_cost_tools}
-                    className="mr-2"
-                  />
-                  高成本工具
-                </label>
-                <div className="ml-auto flex items-center gap-2">
-                  {item.id === user.id ? (
-                    <span className="text-muted-foreground text-xs">
-                      当前账号
-                    </span>
-                  ) : (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="destructive"
-                      disabled={
-                        deletingUserId === item.id || savingUserId === item.id
-                      }
-                      onClick={() => remove(item)}
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <label className="text-muted-foreground text-xs">
+                    角色
+                    <select
+                      name="role"
+                      defaultValue={item.role}
+                      className="bg-background mt-1 h-9 w-full rounded-md border px-2 text-sm"
                     >
-                      <Trash2 className="size-4" />
-                      {deletingUserId === item.id ? "删除中…" : "删除成员"}
-                    </Button>
-                  )}
-                  <Button
-                    size="sm"
-                    disabled={savingUserId === item.id}
-                  >
-                    {savingUserId === item.id ? "保存中…" : "保存"}
-                  </Button>
+                      <option value="user">普通用户</option>
+                      <option value="admin">管理员</option>
+                    </select>
+                  </label>
+                  <label className="text-muted-foreground text-xs">
+                    每分钟请求数
+                    <Input
+                      name="rpm"
+                      type="number"
+                      defaultValue={item.policy.rpm_limit}
+                      className="mt-1"
+                    />
+                  </label>
+                  <label className="text-muted-foreground text-xs">
+                    月标记配额
+                    <Input
+                      name="quota"
+                      type="number"
+                      defaultValue={item.policy.monthly_token_quota}
+                      className="mt-1"
+                    />
+                  </label>
+                  <label className="text-muted-foreground text-xs sm:col-span-2 lg:col-span-1">
+                    允许模型
+                    <Input
+                      name="models"
+                      defaultValue={item.policy.allowed_models.join(", ")}
+                      className="mt-1"
+                    />
+                  </label>
                 </div>
-              </div>
-            </form>
-          ))}
+                <div className="mt-4 flex flex-wrap items-center gap-4 text-sm">
+                  <label>
+                    <input
+                      name="is_active"
+                      type="checkbox"
+                      defaultChecked={item.is_active}
+                      className="mr-2"
+                    />
+                    账号启用
+                  </label>
+                  <label>
+                    <input
+                      name="high_cost"
+                      type="checkbox"
+                      defaultChecked={item.policy.allow_high_cost_tools}
+                      className="mr-2"
+                    />
+                    高成本工具
+                  </label>
+                  <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+                    {feedback && (
+                      <span
+                        className={
+                          feedback.type === "success"
+                            ? "flex items-center gap-1 text-xs text-emerald-600"
+                            : "flex items-center gap-1 text-xs text-destructive"
+                        }
+                      >
+                        {feedback.type === "success" ? (
+                          <CheckCircle2 className="size-4" />
+                        ) : (
+                          <AlertCircle className="size-4" />
+                        )}
+                        {feedback.text}
+                      </span>
+                    )}
+                    {item.id === user.id ? (
+                      <span className="text-muted-foreground text-xs">
+                        当前账号
+                      </span>
+                    ) : (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="destructive"
+                        disabled={
+                          deletingUserId === item.id || savingUserId === item.id
+                        }
+                        onClick={() => remove(item)}
+                      >
+                        <Trash2 className="size-4" />
+                        {deletingUserId === item.id ? "删除中…" : "删除成员"}
+                      </Button>
+                    )}
+                    <Button
+                      type="submit"
+                      size="sm"
+                      disabled={savingUserId === item.id}
+                    >
+                      {savingUserId === item.id ? "保存中…" : "保存"}
+                    </Button>
+                  </div>
+                </div>
+              </form>
+            );
+          })}
         </section>
       </div>
     </main>
@@ -302,6 +404,7 @@ function AdminContent() {
 export default function AdminPage() {
   return (
     <AuthBoundary>
+      <Toaster />
       <AdminContent />
     </AuthBoundary>
   );
