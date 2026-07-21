@@ -80,15 +80,15 @@ function parseAnthropicStreamedToolCalls(
 
 interface InterruptProps {
   interrupt?: unknown;
-  isLastMessage: boolean;
-  hasNoAIOrToolMessages: boolean;
+  shouldRender: boolean;
 }
 
 function Interrupt({
   interrupt,
-  isLastMessage,
-  hasNoAIOrToolMessages,
+  shouldRender,
 }: InterruptProps) {
+  if (!interrupt || !shouldRender) return null;
+
   const fallbackValue = Array.isArray(interrupt)
     ? (interrupt as Record<string, any>[])
     : (((interrupt as { value?: unknown } | undefined)?.value ??
@@ -96,17 +96,82 @@ function Interrupt({
 
   return (
     <>
-      {isAgentInboxInterruptSchema(interrupt) &&
-        (isLastMessage || hasNoAIOrToolMessages) && (
-          <ThreadView interrupt={interrupt} />
-        )}
-      {interrupt &&
-      !isAgentInboxInterruptSchema(interrupt) &&
-      (isLastMessage || hasNoAIOrToolMessages) ? (
+      {isAgentInboxInterruptSchema(interrupt) && (
+        <ThreadView interrupt={interrupt} />
+      )}
+      {!isAgentInboxInterruptSchema(interrupt) ? (
         <GenericInterruptView interrupt={fallbackValue} />
       ) : null}
     </>
   );
+}
+
+function normalizeToolName(name: unknown) {
+  return typeof name === "string" ? name.trim().toLowerCase() : "";
+}
+
+function getInterruptActionNames(interrupt: unknown) {
+  if (!isAgentInboxInterruptSchema(interrupt)) return [];
+
+  const interrupts = Array.isArray(interrupt) ? interrupt : [interrupt];
+  return interrupts
+    .flatMap((item) =>
+      (item.value?.action_requests ?? []).map((request) =>
+        normalizeToolName(request.name),
+      ),
+    )
+    .filter(Boolean);
+}
+
+function getMessageToolNames(
+  message: BaseMessage | undefined,
+  streamedToolCalls: AIMessage["tool_calls"] | undefined,
+) {
+  const names = new Set<string>();
+
+  if (message && isAIMessage(message)) {
+    message.tool_calls?.forEach((toolCall) => {
+      const name = normalizeToolName(toolCall.name);
+      if (name) names.add(name);
+    });
+  }
+
+  streamedToolCalls?.forEach((toolCall) => {
+    const name = normalizeToolName(toolCall.name);
+    if (name) names.add(name);
+  });
+
+  if (message && isToolMessage(message)) {
+    const name = normalizeToolName((message as { name?: unknown }).name);
+    if (name) names.add(name);
+  }
+
+  return names;
+}
+
+function shouldRenderInterruptForMessage({
+  interrupt,
+  message,
+  streamedToolCalls,
+  isLastMessage,
+  hasNoAIOrToolMessages,
+}: {
+  interrupt: unknown;
+  message: BaseMessage | undefined;
+  streamedToolCalls: AIMessage["tool_calls"] | undefined;
+  isLastMessage: boolean;
+  hasNoAIOrToolMessages: boolean;
+}) {
+  if (!interrupt) return false;
+  if (hasNoAIOrToolMessages) return true;
+  if (!isLastMessage || !message) return false;
+  if (!isAgentInboxInterruptSchema(interrupt)) return true;
+
+  const actionNames = getInterruptActionNames(interrupt);
+  if (actionNames.length === 0) return false;
+
+  const toolNames = getMessageToolNames(message, streamedToolCalls);
+  return actionNames.some((name) => toolNames.has(name));
 }
 
 function parseToolContent(content: unknown): unknown {
@@ -212,8 +277,8 @@ export function AssistantMessage({
   );
 
   const thread = useStreamContext();
-  const isLastMessage =
-    thread.messages[thread.messages.length - 1].id === message?.id;
+  const lastThreadMessage = thread.messages[thread.messages.length - 1];
+  const isLastMessage = !!message && lastThreadMessage?.id === message.id;
   const hasNoAIOrToolMessages = !thread.messages.find(
     (m) => m.type === "ai" || m.type === "tool",
   );
@@ -249,8 +314,13 @@ export function AssistantMessage({
           item.type === "ai" &&
           getContentString(item.content).trim().length > 0,
       );
-  const shouldShowInterrupt =
-    !!threadInterrupt && (isLastMessage || hasNoAIOrToolMessages);
+  const shouldShowInterrupt = shouldRenderInterruptForMessage({
+    interrupt: threadInterrupt,
+    message,
+    streamedToolCalls: anthropicStreamedToolCalls,
+    isLastMessage,
+    hasNoAIOrToolMessages,
+  });
   const isPendingApproval = isAgentInboxInterruptSchema(threadInterrupt);
 
   if (isToolResult && hideToolCalls) {
@@ -269,8 +339,7 @@ export function AssistantMessage({
             <ToolResult message={message} />
             <Interrupt
               interrupt={threadInterrupt}
-              isLastMessage={isLastMessage}
-              hasNoAIOrToolMessages={hasNoAIOrToolMessages}
+              shouldRender={shouldShowInterrupt}
             />
           </>
         ) : (
@@ -283,8 +352,7 @@ export function AssistantMessage({
 
             <Interrupt
               interrupt={threadInterrupt}
-              isLastMessage={isLastMessage}
-              hasNoAIOrToolMessages={hasNoAIOrToolMessages}
+              shouldRender={shouldShowInterrupt}
             />
 
             {!hideToolCalls && (
