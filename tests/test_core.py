@@ -6,11 +6,13 @@ import pytest
 from langchain.agents.middleware import ModelRequest, ModelResponse
 from langchain.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langgraph.runtime import Runtime, ServerInfo
+from redis.exceptions import RedisError
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 import app.agents.chat as chat_module
+import app.cache.service as cache_service_module
 from app.agents.chat import (
     HITL_TOOL_CONFIG,
     PolicyTraceMiddleware,
@@ -41,12 +43,22 @@ def test_logging_configuration_sets_root_level():
 class FakeRedis:
     def __init__(self):
         self.values = {}
+        self.ttls = {}
 
     def get(self, key):
         return self.values.get(key)
 
     def setex(self, key, ttl, value):
         self.values[key] = value
+        self.ttls[key] = ttl
+
+    def set(self, key, value, nx=False, ex=None):
+        if nx and key in self.values:
+            return False
+        self.values[key] = value
+        if ex is not None:
+            self.ttls[key] = ex
+        return True
 
     def scan_iter(self, match, count=200):
         prefix = match.removesuffix("*")
@@ -57,6 +69,12 @@ class FakeRedis:
 
     def ping(self):
         return True
+
+    def eval(self, _script, _numkeys, key, token):
+        if self.values.get(key) == token:
+            self.delete(key)
+            return 1
+        return 0
 
 
 def test_model_catalog_and_tool_registry(monkeypatch):
@@ -160,6 +178,88 @@ def test_json_cache_round_trip_and_invalidation():
     assert cache.get_json("rag:query:one") == {"answer": 42}
     assert cache.delete_pattern("rag:query:*") == 1
     assert cache.get_json("rag:query:one") is None
+
+
+def test_cache_ttl_jitter_and_negative_cache(monkeypatch):
+    fake_redis = FakeRedis()
+    cache = CacheService(fake_redis)
+    monkeypatch.setattr(cache_service_module.settings, "cache_ttl_jitter_ratio", 0.2)
+
+    assert cache.set_json("regular", {"answer": 42}, ttl=100)
+    assert 80 <= fake_redis.ttls["regular"] <= 120
+
+    assert cache.set_negative_json("missing", [], ttl=30)
+    lookup = cache.get_json_lookup("missing")
+    assert lookup.hit
+    assert lookup.is_negative
+    assert lookup.value == []
+    assert cache.get_json("missing") == []
+
+
+def test_cache_get_or_set_uses_negative_cache_and_lock(monkeypatch):
+    fake_redis = FakeRedis()
+    cache = CacheService(fake_redis)
+    calls = 0
+    monkeypatch.setattr(cache_service_module.settings, "cache_ttl_jitter_ratio", 0)
+
+    def produce_empty():
+        nonlocal calls
+        calls += 1
+        return []
+
+    first = cache.get_or_set_json(
+        "empty-query",
+        produce_empty,
+        ttl=300,
+        negative_ttl=15,
+        should_cache_negative=lambda value: value == [],
+    )
+    second = cache.get_or_set_json(
+        "empty-query",
+        lambda: pytest.fail("negative cache should satisfy repeated lookups"),
+        ttl=300,
+        negative_ttl=15,
+        should_cache_negative=lambda value: value == [],
+    )
+
+    assert first.created
+    assert first.is_negative
+    assert first.value == []
+    assert second.hit
+    assert not second.created
+    assert second.is_negative
+    assert second.value == []
+    assert fake_redis.ttls["empty-query"] == 15
+    assert calls == 1
+
+
+def test_cache_get_or_set_degrades_without_waiting_on_redis_error(monkeypatch):
+    class FailingRedis(FakeRedis):
+        def get(self, key):
+            raise RedisError("redis unavailable")
+
+        def set(self, key, value, nx=False, ex=None):
+            raise RedisError("redis unavailable")
+
+        def setex(self, key, ttl, value):
+            raise RedisError("redis unavailable")
+
+    cache = CacheService(FailingRedis())
+    calls = 0
+    monkeypatch.setattr(cache_service_module.settings, "cache_lock_wait_seconds", 2)
+    started = time.perf_counter()
+
+    def produce_value():
+        nonlocal calls
+        calls += 1
+        return {"ok": True}
+
+    lookup = cache.get_or_set_json("unstable", produce_value)
+
+    assert lookup.created
+    assert lookup.value == {"ok": True}
+    assert calls == 1
+    assert time.perf_counter() - started < 0.5
 
 
 def test_policy_middleware_returns_cached_plain_model_response(monkeypatch):
@@ -698,10 +798,7 @@ def test_stock_quote_maps_chinese_index_alias(monkeypatch):
             return FakeResponse()
 
     monkeypatch.setattr(external_tools.settings, "alpha_vantage_api_key", "test-key")
-    monkeypatch.setattr(external_tools.cache, "get_json", lambda _key: None)
-    monkeypatch.setattr(
-        external_tools.cache, "set_json", lambda *_args, **_kwargs: None
-    )
+    monkeypatch.setattr(external_tools, "cache", CacheService(FakeRedis()))
     monkeypatch.setattr(external_tools.httpx, "Client", FakeClient)
 
     result = external_tools.get_stock_quote.func("标普500当前价格")

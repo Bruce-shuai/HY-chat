@@ -76,7 +76,7 @@ export function ThreadHistory() {
         >
           <SheetContent
             side="left"
-            className="flex lg:hidden"
+            className="flex min-w-0 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] lg:hidden"
           >
             <SheetHeader>
               <SheetTitle>会话</SheetTitle>

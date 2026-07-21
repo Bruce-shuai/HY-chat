@@ -3,7 +3,7 @@ import { prettifyText, unknownToPrettyDate } from "../utils";
 
 export function ToolCallTable({ toolCall }: { toolCall: ToolCall }) {
   return (
-    <div className="max-w-full min-w-[300px] overflow-hidden rounded-lg border">
+    <div className="max-w-full min-w-0 overflow-hidden rounded-lg border">
       <table className="w-full border-collapse">
         <thead>
           <tr>
@@ -39,10 +39,12 @@ export function ToolCallTable({ toolCall }: { toolCall: ToolCall }) {
                 key={key}
                 className="border-t"
               >
-                <td className="w-1/3 px-2 py-1 text-xs font-medium">
+                <td className="w-1/3 px-2 py-1 text-xs font-medium break-words">
                   {prettifyText(key)}
                 </td>
-                <td className="px-2 py-1 font-mono text-xs">{valueStr}</td>
+                <td className="px-2 py-1 font-mono text-xs break-all">
+                  {valueStr}
+                </td>
               </tr>
             );
           })}

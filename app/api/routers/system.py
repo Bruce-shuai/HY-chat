@@ -53,4 +53,7 @@ def cache_health():
         "backend": "redis",
         "default_ttl": settings.cache_default_ttl,
         "chat_response_ttl": settings.chat_response_cache_ttl,
+        "negative_ttl": settings.cache_negative_ttl,
+        "ttl_jitter_ratio": settings.cache_ttl_jitter_ratio,
+        "lock_ttl": settings.cache_lock_ttl,
     }

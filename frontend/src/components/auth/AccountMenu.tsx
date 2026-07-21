@@ -16,7 +16,7 @@ export function AccountMenu() {
   const { user, accounts, switchAccount, logout } = useAuth();
   if (!user) return null;
   return (
-    <details className="relative">
+    <details className="relative shrink-0">
       <summary className="bg-background hover:bg-accent flex cursor-pointer list-none items-center gap-2 rounded-xl border px-2.5 py-2 text-sm">
         <span className="bg-primary text-primary-foreground flex size-7 items-center justify-center rounded-full">
           {user.display_name.slice(0, 1).toUpperCase()}
@@ -25,7 +25,7 @@ export function AccountMenu() {
           {user.display_name}
         </span>
       </summary>
-      <div className="bg-popover text-popover-foreground absolute right-0 z-50 mt-2 w-64 rounded-2xl border p-2 shadow-xl">
+      <div className="bg-popover text-popover-foreground absolute right-0 z-50 mt-2 w-64 max-w-[calc(100vw-1rem)] rounded-2xl border p-2 shadow-xl">
         <div className="flex items-start justify-between gap-2 border-b px-3 py-2">
           <div className="min-w-0">
             <p className="truncate text-sm font-medium">{user.display_name}</p>

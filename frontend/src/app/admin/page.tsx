@@ -231,32 +231,34 @@ function AdminContent() {
   return (
     <main className="bg-muted/30 min-h-dvh">
       <header className="bg-background/90 sticky top-0 z-20 border-b backdrop-blur">
-        <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-3 sm:px-6">
+        <div className="mx-auto flex max-w-7xl items-center gap-2 px-3 py-3 sm:gap-3 sm:px-6">
           <Link
             href="/"
-            className="hover:bg-muted rounded-lg p-2"
+            className="hover:bg-muted shrink-0 rounded-lg p-2"
           >
             <ArrowLeft className="size-5" />
           </Link>
-          <Shield className="size-5" />
-          <h1 className="flex-1 font-semibold">HY-chat 后台管理</h1>
+          <Shield className="size-5 shrink-0" />
+          <h1 className="min-w-0 flex-1 truncate font-semibold">
+            HY-chat 后台管理
+          </h1>
           <AccountMenu />
         </div>
       </header>
-      <div className="mx-auto max-w-7xl p-4 sm:p-6">
-        <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="mx-auto max-w-7xl p-3 sm:p-6">
+        <section className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
           {cards.map(([label, value, Icon]) => (
             <div
               key={label}
-              className="bg-background rounded-2xl border p-4"
+              className="bg-background rounded-xl border p-3 sm:rounded-2xl sm:p-4"
             >
-              <Icon className="text-muted-foreground mb-4 size-5" />
-              <p className="text-2xl font-semibold">{value}</p>
+              <Icon className="text-muted-foreground mb-3 size-5 sm:mb-4" />
+              <p className="text-xl font-semibold sm:text-2xl">{value}</p>
               <p className="text-muted-foreground text-xs">{label}</p>
             </div>
           ))}
         </section>
-        <div className="mt-6 flex items-center justify-between">
+        <div className="mt-5 flex flex-col gap-1 sm:mt-6 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="text-lg font-semibold">账号与智能权限</h2>
           {message && (
             <span className="text-muted-foreground text-sm">{message}</span>
@@ -277,12 +279,12 @@ function AdminContent() {
                   item.policy.allowed_models.join("|"),
                 ].join(":")}
                 onSubmit={(event) => save(event, item)}
-                className="bg-background rounded-2xl border p-4 sm:p-5"
+                className="bg-background rounded-xl border p-4 sm:rounded-2xl sm:p-5"
               >
                 <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-                  <div>
+                  <div className="min-w-0">
                     <h3 className="font-medium">{item.display_name}</h3>
-                    <p className="text-muted-foreground text-xs">
+                    <p className="text-muted-foreground text-xs break-all">
                       {item.email}
                     </p>
                   </div>
@@ -329,7 +331,7 @@ function AdminContent() {
                     />
                   </label>
                 </div>
-                <div className="mt-4 flex flex-wrap items-center gap-4 text-sm">
+                <div className="mt-4 flex flex-col gap-4 text-sm sm:flex-row sm:flex-wrap sm:items-center">
                   <label>
                     <input
                       name="is_active"
@@ -348,13 +350,13 @@ function AdminContent() {
                     />
                     高成本工具
                   </label>
-                  <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+                  <div className="flex w-full flex-col gap-2 sm:ml-auto sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
                     {feedback && (
                       <span
                         className={
                           feedback.type === "success"
-                            ? "flex items-center gap-1 text-xs text-emerald-600"
-                            : "flex items-center gap-1 text-xs text-destructive"
+                            ? "flex items-center gap-1 text-xs text-emerald-600 sm:justify-end"
+                            : "text-destructive flex items-center gap-1 text-xs sm:justify-end"
                         }
                       >
                         {feedback.type === "success" ? (
@@ -374,6 +376,7 @@ function AdminContent() {
                         type="button"
                         size="sm"
                         variant="destructive"
+                        className="w-full sm:w-auto"
                         disabled={
                           deletingUserId === item.id || savingUserId === item.id
                         }
@@ -386,6 +389,7 @@ function AdminContent() {
                     <Button
                       type="submit"
                       size="sm"
+                      className="w-full sm:w-auto"
                       disabled={savingUserId === item.id}
                     >
                       {savingUserId === item.id ? "保存中…" : "保存"}

@@ -229,7 +229,7 @@ function RunDetailDrawer({
       onClick={onClose}
     >
       <aside
-        className="bg-background h-full w-full overflow-y-auto p-5 shadow-2xl sm:max-w-3xl"
+        className="bg-background h-full w-full overflow-y-auto px-4 pt-[calc(env(safe-area-inset-top)+1rem)] pb-[calc(env(safe-area-inset-bottom)+1rem)] shadow-2xl sm:max-w-3xl sm:p-5"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="mb-5 flex items-start justify-between gap-3">
@@ -474,15 +474,15 @@ function CodingAgentContent() {
   return (
     <main className="bg-muted/30 min-h-dvh">
       <header className="bg-background/90 sticky top-0 z-20 border-b backdrop-blur">
-        <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-3 sm:px-6">
+        <div className="mx-auto flex max-w-7xl items-center gap-2 px-3 py-3 sm:gap-3 sm:px-6">
           <Link
             href="/"
-            className="hover:bg-muted rounded-lg p-2"
+            className="hover:bg-muted shrink-0 rounded-lg p-2"
             aria-label="返回聊天"
           >
             <ArrowLeft className="size-5" />
           </Link>
-          <Code2 className="size-5" />
+          <Code2 className="size-5 shrink-0" />
           <div className="min-w-0 flex-1">
             <h1 className="font-semibold">Coding Agent</h1>
             <p className="text-muted-foreground truncate text-xs">
@@ -493,7 +493,7 @@ function CodingAgentContent() {
         </div>
       </header>
 
-      <div className="mx-auto max-w-7xl p-4 sm:p-6">
+      <div className="mx-auto max-w-7xl p-3 sm:p-6">
         <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
           <form
             onSubmit={submitRun}
@@ -549,12 +549,13 @@ function CodingAgentContent() {
                   </select>
                 </label>
               </div>
-              <div className="flex flex-wrap items-center justify-end gap-2">
+              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
                 <Button
                   type="button"
                   variant="outline"
                   onClick={loadRuns}
                   disabled={loadingRuns || submitting}
+                  className="w-full sm:w-auto"
                 >
                   <RefreshCcw
                     className={cn("size-4", loadingRuns && "animate-spin")}
@@ -564,6 +565,7 @@ function CodingAgentContent() {
                 <Button
                   type="submit"
                   disabled={!task.trim() || submitting}
+                  className="w-full sm:w-auto"
                 >
                   {submitting ? (
                     <LoaderCircle className="animate-spin" />
@@ -578,7 +580,7 @@ function CodingAgentContent() {
 
           <section className="bg-background rounded-lg border p-4 sm:p-5">
             <h2 className="mb-4 font-semibold">运行概览</h2>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-2 sm:gap-3">
               {statItems.map(([label, value]) => (
                 <div
                   key={label}
@@ -592,8 +594,8 @@ function CodingAgentContent() {
           </section>
         </section>
 
-        <section className="bg-background mt-5 overflow-hidden rounded-lg border">
-          <div className="flex items-center justify-between gap-3 border-b px-4 py-3">
+        <section className="bg-background mt-4 overflow-hidden rounded-lg border sm:mt-5">
+          <div className="flex items-center justify-between gap-3 border-b px-3 py-3 sm:px-4">
             <h2 className="font-semibold">运行历史</h2>
             <Button
               variant="ghost"
@@ -615,7 +617,7 @@ function CodingAgentContent() {
                 <button
                   key={run.id}
                   onClick={() => openRun(run)}
-                  className="hover:bg-muted/30 grid w-full gap-2 p-4 text-left sm:grid-cols-[150px_minmax(0,1fr)_220px_180px] sm:items-center"
+                  className="hover:bg-muted/30 grid w-full gap-2 p-3 text-left sm:grid-cols-[150px_minmax(0,1fr)_220px_180px] sm:items-center sm:p-4"
                 >
                   <RunStatusBadge status={run.status} />
                   <div className="min-w-0">
@@ -624,7 +626,7 @@ function CodingAgentContent() {
                       {run.final_output || run.error_message || run.id}
                     </p>
                   </div>
-                  <span className="text-muted-foreground truncate text-xs">
+                  <span className="text-muted-foreground text-xs break-all sm:truncate">
                     {run.workspace}
                   </span>
                   <time className="text-muted-foreground text-xs">

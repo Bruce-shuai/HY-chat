@@ -237,6 +237,8 @@ curl -N -X POST http://localhost:8000/chat/stream \
 
 事件类型为 `metadata`、`token`、`done` 和 `error`。缓存命中状态位于 `metadata.cache_hit`。主页面的 LangGraph 会话和 FastAPI SSE 都会使用 Redis 缓存相同用户、模型与会话上下文下的纯文本回复，命中后会跳过模型生成并立即返回；工具调用、联网、天气、股票等外部结果仍按工具自身缓存策略处理。Redis 不可用时缓存自动降级。聊天回复缓存时间可通过 `CHAT_RESPONSE_CACHE_TTL` 配置。
 
+缓存层内置轻量防护：`CACHE_TTL_JITTER_RATIO` 为写入 TTL 增加随机抖动以降低雪崩风险，`CACHE_NEGATIVE_TTL` 为稳定空结果提供短缓存以降低穿透风险，`CACHE_LOCK_TTL` / `CACHE_LOCK_WAIT_SECONDS` / `CACHE_LOCK_POLL_SECONDS` 用 Redis lock 降低热点 key 击穿时的重复生成。
+
 ## 验证
 
 ```bash

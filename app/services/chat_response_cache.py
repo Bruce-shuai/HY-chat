@@ -6,7 +6,7 @@ from langchain.agents.middleware import ModelRequest, ModelResponse
 from langchain.messages import AIMessage
 from langchain_core.messages import BaseMessage
 
-from app.cache.service import cache
+from app.cache.service import CacheLock, cache
 from app.core.config import get_settings
 from app.core.types import JsonObject, JsonValue
 from app.tracing.service import safe_json
@@ -85,11 +85,14 @@ def get_cached_response(cache_key: str | None) -> ModelResponse | None:
     if not cache_key:
         return None
 
-    cached = cache.get_json(cache_key)
-    if not isinstance(cached, Mapping):
+    return _cached_response_from_value(cache.get_json(cache_key))
+
+
+def _cached_response_from_value(value: object) -> ModelResponse | None:
+    if not isinstance(value, Mapping):
         return None
 
-    content = cached.get("content")
+    content = value.get("content")
     if not isinstance(content, str) or not content:
         return None
 
@@ -101,6 +104,25 @@ def get_cached_response(cache_key: str | None) -> ModelResponse | None:
             )
         ]
     )
+
+
+def acquire_response_lock(cache_key: str | None) -> CacheLock | None:
+    if not cache_key:
+        return None
+    return cache.acquire_lock(cache_key, ttl=settings.cache_lock_ttl)
+
+
+def wait_for_cached_response(cache_key: str | None) -> ModelResponse | None:
+    if not cache_key:
+        return None
+    lookup = cache.wait_for_json(cache_key)
+    if not lookup.hit:
+        return None
+    return _cached_response_from_value(lookup.value)
+
+
+def release_response_lock(lock: CacheLock | None) -> bool:
+    return cache.release_lock(lock)
 
 
 def cacheable_response_content(response: ModelResponse) -> str | None:

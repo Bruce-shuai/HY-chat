@@ -75,6 +75,24 @@ class Settings(BaseSettings):
     cache_default_ttl: int = Field(default=600, alias="CACHE_DEFAULT_TTL")
     chat_response_cache_ttl: int = Field(default=600, alias="CHAT_RESPONSE_CACHE_TTL")
     cache_embedding_ttl: int = Field(default=604800, alias="CACHE_EMBEDDING_TTL")
+    cache_negative_ttl: int = Field(default=60, alias="CACHE_NEGATIVE_TTL")
+    cache_ttl_jitter_ratio: float = Field(
+        default=0.1,
+        ge=0.0,
+        le=1.0,
+        alias="CACHE_TTL_JITTER_RATIO",
+    )
+    cache_lock_ttl: int = Field(default=30, alias="CACHE_LOCK_TTL")
+    cache_lock_wait_seconds: float = Field(
+        default=3.0,
+        ge=0.0,
+        alias="CACHE_LOCK_WAIT_SECONDS",
+    )
+    cache_lock_poll_seconds: float = Field(
+        default=0.05,
+        gt=0.0,
+        alias="CACHE_LOCK_POLL_SECONDS",
+    )
 
     rag_upload_dir: str = Field(default="/data/rag/uploads", alias="RAG_UPLOAD_DIR")
     rag_chunk_size: int = Field(default=1000, alias="RAG_CHUNK_SIZE")

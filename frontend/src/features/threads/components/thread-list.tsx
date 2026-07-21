@@ -207,7 +207,7 @@ export function ThreadList({ threads, onThreadClick }: ThreadListProps) {
   };
 
   return (
-    <div className="[&::-webkit-scrollbar-thumb]:bg-border flex h-full w-full flex-col items-start justify-start gap-2 overflow-y-scroll [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-transparent">
+    <div className="[&::-webkit-scrollbar-thumb]:bg-border flex min-h-0 w-full flex-1 flex-col items-start justify-start gap-2 overflow-y-auto overscroll-contain px-1 pb-3 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-transparent">
       {threads.map((thread) => {
         const isActive = thread.thread_id === threadId;
         const isEditing = editingThreadId === thread.thread_id;

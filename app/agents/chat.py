@@ -11,6 +11,7 @@ Request flow:
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import time
@@ -57,10 +58,13 @@ from app.services.memory_service import (
     user_memory_map,
 )
 from app.services.chat_response_cache import (
+    acquire_response_lock,
     build_cache_key as build_chat_response_cache_key,
     build_request_cache_key,
     get_cached_response,
+    release_response_lock,
     store_response,
+    wait_for_cached_response,
 )
 from app.tools.registry import get_agent_tools
 from app.tracing.service import safe_json
@@ -464,8 +468,32 @@ class PolicyTraceMiddleware(AgentMiddleware):
         except PolicyViolation as exc:
             logger.warning("Model call blocked by policy: %s", exc)
             return _policy_violation_response(str(exc))
+        cache_lock = None
         try:
             if cached := get_cached_response(cache_key):
+                self._finish_model_call(
+                    db,
+                    user_id,
+                    trace,
+                    cached,
+                    started,
+                    cache_hit=True,
+                )
+                return cached
+
+            cache_lock = acquire_response_lock(cache_key)
+            if cache_key and not cache_lock:
+                if cached := wait_for_cached_response(cache_key):
+                    self._finish_model_call(
+                        db,
+                        user_id,
+                        trace,
+                        cached,
+                        started,
+                        cache_hit=True,
+                    )
+                    return cached
+            elif cache_lock and (cached := get_cached_response(cache_key)):
                 self._finish_model_call(
                     db,
                     user_id,
@@ -492,6 +520,7 @@ class PolicyTraceMiddleware(AgentMiddleware):
             self._fail_trace(db, trace, exc, started)
             raise
         finally:
+            release_response_lock(cache_lock)
             db.close()
 
     async def awrap_model_call(self, request: ModelRequest, handler):
@@ -503,8 +532,33 @@ class PolicyTraceMiddleware(AgentMiddleware):
         except PolicyViolation as exc:
             logger.warning("Model call blocked by policy: %s", exc)
             return _policy_violation_response(str(exc))
+        cache_lock = None
         try:
             if cached := get_cached_response(cache_key):
+                self._finish_model_call(
+                    db,
+                    user_id,
+                    trace,
+                    cached,
+                    started,
+                    cache_hit=True,
+                )
+                return cached
+
+            cache_lock = acquire_response_lock(cache_key)
+            if cache_key and not cache_lock:
+                cached = await asyncio.to_thread(wait_for_cached_response, cache_key)
+                if cached:
+                    self._finish_model_call(
+                        db,
+                        user_id,
+                        trace,
+                        cached,
+                        started,
+                        cache_hit=True,
+                    )
+                    return cached
+            elif cache_lock and (cached := get_cached_response(cache_key)):
                 self._finish_model_call(
                     db,
                     user_id,
@@ -531,6 +585,7 @@ class PolicyTraceMiddleware(AgentMiddleware):
             self._fail_trace(db, trace, exc, started)
             raise
         finally:
+            release_response_lock(cache_lock)
             db.close()
 
     @staticmethod
@@ -654,6 +709,7 @@ def _build_mock_graph():
         cache_key = None
         cache_hit = False
         response_text = ""
+        cache_lock = None
         if user_id:
             db = SessionLocal()
             try:
@@ -687,7 +743,14 @@ def _build_mock_graph():
                     response_text = str(cached_response.result[0].content)
                     cache_hit = True
                 else:
-                    enforce_model(db, user_id, selected)
+                    cache_lock = acquire_response_lock(cache_key)
+                    if not cache_lock and (
+                        cached_response := wait_for_cached_response(cache_key)
+                    ):
+                        response_text = str(cached_response.result[0].content)
+                        cache_hit = True
+                    else:
+                        enforce_model(db, user_id, selected)
             finally:
                 db.close()
 
@@ -753,6 +816,7 @@ def _build_mock_graph():
                 db.close()
         if not cache_hit:
             store_response(cache_key, ModelResponse(result=[message]))
+        release_response_lock(cache_lock)
         return {
             "selected_model": selected,
             "messages": [message],

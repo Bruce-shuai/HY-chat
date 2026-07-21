@@ -58,7 +58,7 @@ export function ThreadView({ interrupt }: ThreadViewProps) {
   }
 
   return (
-    <div className="bg-muted/30 flex h-full w-full flex-col rounded-2xl p-8 lg:flex-row">
+    <div className="bg-muted/30 flex h-full w-full min-w-0 flex-col rounded-xl p-3 sm:p-5 lg:flex-row lg:rounded-2xl lg:p-8">
       {showSidePanel ? (
         <StateView
           handleShowSidePanel={handleShowSidePanel}

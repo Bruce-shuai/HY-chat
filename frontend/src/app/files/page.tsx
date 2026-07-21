@@ -96,21 +96,21 @@ function FilesContent() {
   return (
     <main className="bg-muted/30 min-h-dvh">
       <header className="bg-background/90 sticky top-0 z-20 border-b backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3 sm:px-6">
+        <div className="mx-auto flex max-w-6xl items-center gap-2 px-3 py-3 sm:gap-3 sm:px-6">
           <Link
             href="/"
-            className="hover:bg-muted rounded-lg p-2"
+            className="hover:bg-muted shrink-0 rounded-lg p-2"
           >
             <ArrowLeft className="size-5" />
           </Link>
-          <Files className="size-5" />
-          <h1 className="flex-1 font-semibold">文件存储</h1>
+          <Files className="size-5 shrink-0" />
+          <h1 className="min-w-0 flex-1 truncate font-semibold">文件存储</h1>
           <AccountMenu />
         </div>
       </header>
-      <div className="mx-auto max-w-6xl p-4 sm:p-6">
-        <section className="bg-background mb-5 flex flex-col justify-between gap-3 rounded-2xl border p-5 sm:flex-row sm:items-center">
-          <div>
+      <div className="mx-auto max-w-6xl p-3 sm:p-6">
+        <section className="bg-background mb-4 flex flex-col justify-between gap-3 rounded-xl border p-4 sm:mb-5 sm:flex-row sm:items-center sm:rounded-2xl sm:p-5">
+          <div className="min-w-0">
             <h2 className="font-semibold">图片与文件</h2>
             <p className="text-muted-foreground mt-1 text-sm">
               文件按账号隔离，可使用本地卷或兼容对象存储。
@@ -119,6 +119,7 @@ function FilesContent() {
           <Button
             onClick={() => inputRef.current?.click()}
             disabled={uploading}
+            className="w-full sm:w-auto"
           >
             {uploading ? <LoaderCircle className="animate-spin" /> : <Upload />}{" "}
             上传文件
@@ -131,7 +132,7 @@ function FilesContent() {
             onChange={upload}
           />
         </section>
-        <section className="bg-background overflow-hidden rounded-2xl border">
+        <section className="bg-background overflow-hidden rounded-xl border sm:rounded-2xl">
           {files.length === 0 ? (
             <p className="text-muted-foreground p-10 text-center text-sm">
               还没有文件。
@@ -141,7 +142,7 @@ function FilesContent() {
               {files.map((item) => (
                 <div
                   key={item.id}
-                  className="flex items-center gap-3 p-4"
+                  className="grid grid-cols-[auto_minmax(0,1fr)] gap-3 p-3 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center sm:p-4"
                 >
                   <span className="bg-muted flex size-10 shrink-0 items-center justify-center rounded-xl">
                     <File className="size-5" />
@@ -150,26 +151,28 @@ function FilesContent() {
                     <p className="truncate text-sm font-medium">
                       {item.filename}
                     </p>
-                    <p className="text-muted-foreground mt-1 text-xs">
+                    <p className="text-muted-foreground mt-1 text-xs break-words sm:truncate">
                       {formatSize(item.size_bytes)} ·{" "}
                       {formatStorageBackend(item.storage_backend)} ·{" "}
                       {new Date(item.created_at).toLocaleString()}
                     </p>
                   </div>
-                  <button
-                    onClick={() => download(item)}
-                    className="hover:bg-muted rounded-lg p-2"
-                    title="下载"
-                  >
-                    <Download className="size-4" />
-                  </button>
-                  <button
-                    onClick={() => remove(item)}
-                    className="rounded-lg p-2 text-red-600 hover:bg-red-50"
-                    title="删除"
-                  >
-                    <Trash2 className="size-4" />
-                  </button>
+                  <div className="col-start-2 flex justify-end gap-1 sm:col-start-auto">
+                    <button
+                      onClick={() => download(item)}
+                      className="hover:bg-muted rounded-lg p-2"
+                      title="下载"
+                    >
+                      <Download className="size-4" />
+                    </button>
+                    <button
+                      onClick={() => remove(item)}
+                      className="rounded-lg p-2 text-red-600 hover:bg-red-50"
+                      title="删除"
+                    >
+                      <Trash2 className="size-4" />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>

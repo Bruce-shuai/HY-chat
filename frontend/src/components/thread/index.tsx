@@ -316,13 +316,13 @@ export function Thread() {
 
       <div
         className={cn(
-          "grid w-full grid-cols-[1fr_0fr] transition-all duration-500",
+          "grid min-h-0 w-full grid-cols-[1fr_0fr] transition-all duration-500",
           artifactOpen && "lg:grid-cols-[3fr_2fr]",
         )}
       >
         <motion.div
           className={cn(
-            "relative flex min-w-0 flex-1 flex-col overflow-hidden",
+            "relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden",
             !chatStarted && "grid-rows-[1fr]",
           )}
           layout={isLargeScreen}
@@ -341,7 +341,7 @@ export function Thread() {
           }
         >
           {!chatStarted && (
-            <div className="absolute top-0 left-0 z-10 flex w-full items-center justify-between gap-3 p-2 pl-4">
+            <div className="absolute top-0 left-0 z-10 flex w-full items-center justify-between gap-3 px-3 pt-[calc(env(safe-area-inset-top)+0.5rem)] pb-2 sm:p-2 sm:pl-4">
               <div>
                 {(!chatHistoryOpen || !isLargeScreen) && (
                   <Button
@@ -363,8 +363,8 @@ export function Thread() {
             </div>
           )}
           {chatStarted && (
-            <div className="relative z-10 flex items-center justify-between gap-3 p-2">
-              <div className="relative flex items-center justify-start gap-2">
+            <div className="relative z-10 flex min-w-0 items-center justify-between gap-2 px-2 pt-[calc(env(safe-area-inset-top)+0.5rem)] pb-2 sm:gap-3 sm:p-2">
+              <div className="relative flex min-w-0 items-center justify-start gap-2">
                 <div className="absolute left-0 z-10">
                   {(!chatHistoryOpen || !isLargeScreen) && (
                     <Button
@@ -381,7 +381,7 @@ export function Thread() {
                   )}
                 </div>
                 <motion.button
-                  className="flex cursor-pointer items-center gap-2"
+                  className="flex min-w-0 cursor-pointer items-center gap-2"
                   onClick={() => setThreadId(null)}
                   animate={{
                     marginLeft: !chatHistoryOpen ? 48 : 0,
@@ -393,13 +393,13 @@ export function Thread() {
                   }}
                 >
                   <BrandLogo className="size-9 border" />
-                  <span className="text-xl font-semibold tracking-tight">
+                  <span className="truncate text-lg font-semibold tracking-tight sm:text-xl">
                     HY-chat
                   </span>
                 </motion.button>
               </div>
 
-              <div className="flex items-center gap-1 sm:gap-2">
+              <div className="flex shrink-0 items-center gap-1 sm:gap-2">
                 <TooltipIconButton
                   size="lg"
                   className="p-4"
@@ -416,14 +416,14 @@ export function Thread() {
             </div>
           )}
 
-          <StickToBottom className="relative flex-1 overflow-hidden">
+          <StickToBottom className="relative min-h-0 flex-1 overflow-hidden">
             <StickyToBottomContent
               className={cn(
-                "[&::-webkit-scrollbar-thumb]:bg-border absolute inset-0 overflow-y-scroll px-4 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-transparent",
+                "[&::-webkit-scrollbar-thumb]:bg-border absolute inset-0 overflow-y-scroll px-3 sm:px-4 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-transparent",
                 !chatStarted && "mt-[25vh] flex flex-col items-stretch",
-                chatStarted && "grid grid-rows-[1fr_auto]",
+                chatStarted && "grid min-h-0 grid-rows-[minmax(0,1fr)_auto]",
               )}
-              contentClassName="pt-8 pb-16 max-w-3xl mx-auto flex flex-col gap-4 w-full"
+              contentClassName="pt-8 pb-16 max-w-3xl mx-auto flex min-h-0 flex-col gap-4 w-full"
               content={
                 <ThreadMessageList
                   firstTokenReceived={firstTokenReceived}
@@ -445,7 +445,7 @@ export function Thread() {
                 />
               }
               footer={
-                <div className="bg-background sticky bottom-0 flex flex-col items-center gap-6 px-2 sm:px-4">
+                <div className="bg-background sticky bottom-0 flex shrink-0 flex-col items-center gap-3 px-2 pb-[env(safe-area-inset-bottom)] sm:gap-6 sm:px-4">
                   {!chatStarted && (
                     <div className="flex items-center justify-center">
                       <BrandLogo
@@ -461,7 +461,9 @@ export function Thread() {
                   <div
                     ref={dropRef}
                     className={cn(
-                      "bg-muted relative z-10 mx-auto mb-3 w-full max-w-3xl rounded-2xl shadow-xs transition-all sm:mb-8",
+                      "bg-muted relative z-10 mx-auto mb-2 w-full max-w-3xl rounded-xl shadow-xs transition-all sm:mb-8 sm:rounded-2xl",
+                      chatStarted &&
+                        "max-h-[58dvh] overflow-hidden sm:max-h-[52dvh]",
                       dragOver
                         ? "border-primary border-2 border-dotted"
                         : "border border-solid",
@@ -469,11 +471,12 @@ export function Thread() {
                   >
                     <form
                       onSubmit={handleSubmit}
-                      className="mx-auto grid max-w-3xl grid-rows-[1fr_auto] gap-2"
+                      className="mx-auto flex max-h-[58dvh] max-w-3xl flex-col gap-2 sm:max-h-[52dvh]"
                     >
                       <ContentBlocksPreview
                         blocks={contentBlocks}
                         onRemove={removeBlock}
+                        className="max-h-28 overflow-y-auto overscroll-contain"
                       />
                       <textarea
                         value={input}
@@ -494,11 +497,11 @@ export function Thread() {
                           }
                         }}
                         placeholder="给 HY-chat 发送消息…"
-                        className="field-sizing-content resize-none border-none bg-transparent p-3.5 pb-0 shadow-none ring-0 outline-none focus:ring-0 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+                        className="field-sizing-content max-h-[34dvh] min-h-12 resize-none overflow-y-auto overscroll-contain border-none bg-transparent p-3 pb-0 shadow-none ring-0 outline-none focus:ring-0 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 sm:max-h-72 sm:p-3.5 sm:pb-0"
                       />
 
-                      <div className="flex flex-wrap items-center gap-2 p-2 pt-3 sm:gap-4">
-                        <label className="text-muted-foreground flex items-center gap-2 text-sm">
+                      <div className="flex shrink-0 flex-wrap items-center gap-1.5 p-2 pt-3 sm:gap-4">
+                        <label className="text-muted-foreground flex min-w-0 items-center gap-2 text-sm">
                           <span className="hidden sm:inline">模型</span>
                           <select
                             aria-label="选择模型"
@@ -506,7 +509,7 @@ export function Thread() {
                             onChange={(event) =>
                               changeModel(event.target.value)
                             }
-                            className="bg-background text-foreground max-w-36 rounded-md border px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-gray-300 sm:max-w-none"
+                            className="bg-background text-foreground max-w-32 rounded-md border px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-gray-300 sm:max-w-none"
                           >
                             {!models.length && (
                               <option value="">默认模型</option>
@@ -584,7 +587,7 @@ export function Thread() {
                           <Button
                             key="stop"
                             onClick={() => stream.stop()}
-                            className="ml-auto"
+                            className="ml-auto h-9 px-3 sm:h-10 sm:px-4"
                           >
                             <LoaderCircle className="h-4 w-4 animate-spin" />
                             停止
@@ -592,7 +595,7 @@ export function Thread() {
                         ) : (
                           <Button
                             type="submit"
-                            className="ml-auto shadow-md transition-all"
+                            className="ml-auto h-9 px-3 shadow-md transition-all sm:h-10 sm:px-4"
                             disabled={
                               isLoading ||
                               isThreadLoading ||
@@ -618,8 +621,8 @@ export function Thread() {
               : "hidden lg:flex",
           )}
         >
-          <div className="absolute inset-0 flex min-w-[30vw] flex-col">
-            <div className="grid grid-cols-[1fr_auto] border-b p-4">
+          <div className="absolute inset-0 flex min-w-0 flex-col lg:min-w-[30vw]">
+            <div className="grid grid-cols-[1fr_auto] border-b px-4 pt-[calc(env(safe-area-inset-top)+1rem)] pb-4 lg:p-4">
               <ArtifactTitle className="truncate overflow-hidden" />
               <button
                 onClick={closeArtifact}

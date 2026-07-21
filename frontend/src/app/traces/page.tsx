@@ -148,15 +148,15 @@ function TraceContent() {
   return (
     <main className="bg-muted/30 min-h-dvh">
       <header className="bg-background/90 sticky top-0 z-20 border-b backdrop-blur">
-        <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-3 sm:px-6">
+        <div className="mx-auto flex max-w-7xl items-center gap-2 px-3 py-3 sm:gap-3 sm:px-6">
           <Link
             href="/"
-            className="hover:bg-muted rounded-lg p-2"
+            className="hover:bg-muted shrink-0 rounded-lg p-2"
             aria-label="返回聊天"
           >
             <ArrowLeft className="size-5" />
           </Link>
-          <Activity className="size-5" />
+          <Activity className="size-5 shrink-0" />
           <div className="min-w-0 flex-1">
             <h1 className="font-semibold">运行追踪</h1>
             <p className="text-muted-foreground truncate text-xs">
@@ -166,10 +166,10 @@ function TraceContent() {
           <AccountMenu />
         </div>
       </header>
-      <div className="mx-auto max-w-7xl p-4 sm:p-6">
+      <div className="mx-auto max-w-7xl p-3 sm:p-6">
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div
-            className="bg-background inline-flex w-fit max-w-full rounded-md border p-1 shadow-xs"
+            className="bg-background inline-flex w-full max-w-full rounded-md border p-1 shadow-xs sm:w-fit"
             aria-label="追踪类型"
           >
             {["", "model", "tool"].map((type) => (
@@ -177,7 +177,7 @@ function TraceContent() {
                 key={type || "all"}
                 variant={spanType === type ? "default" : "ghost"}
                 size="sm"
-                className={`h-7 rounded-sm px-3 shadow-none ${
+                className={`h-7 flex-1 rounded-sm px-3 shadow-none sm:flex-none ${
                   spanType === type
                     ? "hover:bg-primary/90 hover:text-primary-foreground"
                     : "text-muted-foreground hover:text-foreground"
@@ -202,7 +202,7 @@ function TraceContent() {
             刷新
           </Button>
         </div>
-        <section className="bg-background overflow-hidden rounded-2xl border">
+        <section className="bg-background overflow-hidden rounded-xl border sm:rounded-2xl">
           {loading ? (
             <p className="text-muted-foreground p-8 text-center text-sm">
               加载中…
@@ -217,7 +217,7 @@ function TraceContent() {
                 <button
                   key={trace.id}
                   onClick={() => open(trace)}
-                  className="hover:bg-muted/30 grid w-full gap-2 p-4 text-left sm:grid-cols-[minmax(0,1fr)_110px_110px_180px] sm:items-center"
+                  className="hover:bg-muted/30 grid w-full gap-2 p-3 text-left sm:grid-cols-[minmax(0,1fr)_110px_110px_180px] sm:items-center sm:p-4"
                 >
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
@@ -253,7 +253,7 @@ function TraceContent() {
           onClick={() => setSelected(null)}
         >
           <aside
-            className="bg-background h-full w-full overflow-y-auto p-5 shadow-2xl sm:max-w-2xl"
+            className="bg-background h-full w-full overflow-y-auto px-4 pt-[calc(env(safe-area-inset-top)+1rem)] pb-[calc(env(safe-area-inset-bottom)+1rem)] shadow-2xl sm:max-w-2xl sm:p-5"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="mb-5 flex items-start justify-between gap-3">

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 from pathlib import Path
+from typing import cast
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from sqlalchemy import select
@@ -126,40 +127,50 @@ class RagService:
         cache_key = (
             f"rag:query:{cache.digest(self.user_id, query, limit, document_ids or [])}"
         )
-        cached = cache.get_json(cache_key)
-        if cached is not None:
-            return cached
 
-        query_vector = self.embeddings.embed_query(query)
-        distance = KnowledgeChunk.embedding.cosine_distance(query_vector).label(
-            "distance"
-        )
-        statement = (
-            select(KnowledgeChunk, KnowledgeDocument, distance)
-            .join(KnowledgeDocument, KnowledgeChunk.document_id == KnowledgeDocument.id)
-            .where(KnowledgeDocument.status == "ready")
-            .order_by(distance)
-            .limit(limit)
-        )
-        if self.user_id:
-            statement = statement.where(KnowledgeDocument.user_id == self.user_id)
-        if document_ids:
-            statement = statement.where(KnowledgeChunk.document_id.in_(document_ids))
+        def run_search() -> list[JsonObject]:
+            query_vector = self.embeddings.embed_query(query)
+            distance = KnowledgeChunk.embedding.cosine_distance(query_vector).label(
+                "distance"
+            )
+            statement = (
+                select(KnowledgeChunk, KnowledgeDocument, distance)
+                .join(
+                    KnowledgeDocument,
+                    KnowledgeChunk.document_id == KnowledgeDocument.id,
+                )
+                .where(KnowledgeDocument.status == "ready")
+                .order_by(distance)
+                .limit(limit)
+            )
+            if self.user_id:
+                statement = statement.where(KnowledgeDocument.user_id == self.user_id)
+            if document_ids:
+                statement = statement.where(
+                    KnowledgeChunk.document_id.in_(document_ids)
+                )
 
-        rows = self.db.execute(statement).all()
-        results = [
-            {
-                "chunk_id": chunk.id,
-                "document_id": document.id,
-                "filename": document.filename,
-                "content": chunk.content,
-                "metadata": chunk.extra_metadata,
-                "score": round(max(0.0, 1.0 - float(row_distance)), 6),
-            }
-            for chunk, document, row_distance in rows
-        ]
-        cache.set_json(cache_key, results, ttl=300)
-        return results
+            rows = self.db.execute(statement).all()
+            return [
+                {
+                    "chunk_id": chunk.id,
+                    "document_id": document.id,
+                    "filename": document.filename,
+                    "content": chunk.content,
+                    "metadata": chunk.extra_metadata,
+                    "score": round(max(0.0, 1.0 - float(row_distance)), 6),
+                }
+                for chunk, document, row_distance in rows
+            ]
+
+        lookup = cache.get_or_set_json(
+            cache_key,
+            run_search,
+            ttl=300,
+            negative_ttl=settings.cache_negative_ttl,
+            should_cache_negative=lambda value: value == [],
+        )
+        return cast(list[JsonObject], lookup.value or [])
 
     def list_documents(self) -> list[KnowledgeDocument]:
         return list(
