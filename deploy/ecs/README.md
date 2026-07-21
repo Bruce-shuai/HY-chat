@@ -12,6 +12,9 @@ Create two Nginx Proxy Manager proxy hosts after the stack is healthy:
 Enable Websockets Support and request a Let's Encrypt certificate with Force
 SSL and HTTP/2 enabled for both proxy hosts.
 
+The checked-in Nginx Proxy Manager snippets expect the certificate to be
+available at `/etc/letsencrypt/live/hy-ai-chat/`.
+
 ## Alibaba Cloud checklist
 
 The ECS security group must allow inbound TCP ports `80` and `443`. Port `22`
