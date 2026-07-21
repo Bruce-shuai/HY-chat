@@ -150,6 +150,71 @@ def _message_preview(messages: Sequence[BaseMessage]) -> list[JsonObject]:
     ]
 
 
+def _normalize_frontend_multimodal_block(block: Mapping[str, object]) -> dict[str, object]:
+    normalized = dict(block)
+    block_type = normalized.get("type")
+    mime_type = normalized.get("mime_type") or normalized.get("mimeType")
+    data = normalized.get("data")
+
+    if (
+        block_type in {"image", "file"}
+        and isinstance(mime_type, str)
+        and isinstance(data, str)
+        and "source_type" not in normalized
+        and "base64" not in normalized
+    ):
+        normalized["source_type"] = "base64"
+        normalized["mime_type"] = mime_type
+
+        metadata = normalized.get("metadata")
+        filename = None
+        if isinstance(metadata, Mapping):
+            candidate = metadata.get("filename") or metadata.get("name")
+            if isinstance(candidate, str) and candidate.strip():
+                filename = candidate
+        if block_type == "file" and filename and "filename" not in normalized:
+            normalized["filename"] = filename
+
+    return normalized
+
+
+def _normalize_multimodal_content(content: object) -> object:
+    if isinstance(content, Mapping):
+        return _normalize_frontend_multimodal_block(content)
+    if isinstance(content, Sequence) and not isinstance(content, str | bytes | bytearray):
+        return [
+            _normalize_frontend_multimodal_block(block)
+            if isinstance(block, Mapping)
+            else block
+            for block in content
+        ]
+    return content
+
+
+def _normalize_multimodal_messages(
+    messages: Sequence[BaseMessage | Mapping[str, object]],
+) -> list[BaseMessage | dict[str, object]]:
+    normalized_messages: list[BaseMessage | dict[str, object]] = []
+    for message in messages:
+        if isinstance(message, Mapping):
+            normalized = dict(message)
+            normalized["content"] = _normalize_multimodal_content(
+                normalized.get("content", "")
+            )
+            normalized_messages.append(normalized)
+        else:
+            normalized_messages.append(
+                message.model_copy(
+                    update={
+                        "content": _normalize_multimodal_content(
+                            getattr(message, "content", "")
+                        )
+                    }
+                )
+            )
+    return normalized_messages
+
+
 def _content_title(content: object) -> str:
     if isinstance(content, str):
         return " ".join(content.split())
@@ -358,6 +423,9 @@ class PolicyTraceMiddleware(AgentMiddleware):
         user_id = runtime_user_id(request.runtime) or request.state.get("auth_user_id")
         db = SessionLocal()
         try:
+            request = request.override(
+                messages=_normalize_multimodal_messages(request.messages)
+            )
             thread_id = _runtime_thread_id(request.runtime)
             conversation = None
             if user_id:

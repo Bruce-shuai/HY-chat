@@ -18,6 +18,7 @@ from app.agents.chat import (
     PolicyTraceMiddleware,
     _build_mock_graph,
     _conversation_title_from_state,
+    _normalize_multimodal_messages,
     build_hitl_middleware,
 )
 from app.cache.service import CacheService
@@ -399,6 +400,67 @@ def test_conversation_title_extracts_text_from_content_blocks():
     )
 
     assert title == "你好，帮我总结这个项目"
+
+
+def test_frontend_image_blocks_are_normalized_for_chat_models():
+    [message] = _normalize_multimodal_messages(
+        [
+            HumanMessage(
+                content=[
+                    {"type": "text", "text": "识别图片里的文字"},
+                    {
+                        "type": "image",
+                        "mimeType": "image/png",
+                        "data": "abc123",
+                        "metadata": {"name": "screenshot.png"},
+                    },
+                ]
+            )
+        ]
+    )
+
+    assert isinstance(message, HumanMessage)
+    assert message.content == [
+        {"type": "text", "text": "识别图片里的文字"},
+        {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "abc123",
+            "metadata": {"name": "screenshot.png"},
+            "source_type": "base64",
+            "mime_type": "image/png",
+        },
+    ]
+
+
+def test_frontend_file_blocks_keep_filename_when_normalized():
+    [message] = _normalize_multimodal_messages(
+        [
+            HumanMessage(
+                content=[
+                    {
+                        "type": "file",
+                        "mimeType": "application/pdf",
+                        "data": "abc123",
+                        "metadata": {"filename": "report.pdf"},
+                    }
+                ]
+            )
+        ]
+    )
+
+    assert isinstance(message, HumanMessage)
+    assert message.content == [
+        {
+            "type": "file",
+            "mimeType": "application/pdf",
+            "data": "abc123",
+            "metadata": {"filename": "report.pdf"},
+            "source_type": "base64",
+            "mime_type": "application/pdf",
+            "filename": "report.pdf",
+        }
+    ]
 
 
 def test_mock_graph_persists_direct_fastapi_trace_and_conversation(monkeypatch):
