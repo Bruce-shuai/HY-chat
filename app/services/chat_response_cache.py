@@ -1,20 +1,53 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+import hashlib
 
 from langchain.agents.middleware import ModelRequest, ModelResponse
 from langchain.messages import AIMessage
 from langchain_core.messages import BaseMessage
+from pydantic import BaseModel
 
 from app.cache.service import CacheLock, cache
 from app.core.config import get_settings
 from app.core.types import JsonObject, JsonValue
-from app.tracing.service import safe_json
 
 settings = get_settings()
 
 CHAT_RESPONSE_CACHE_VERSION = "v1"
 CHAT_RESPONSE_CACHE_PREFIX = "chat:graph_response"
+CACHE_BINARY_FIELD_NAMES = {"base64", "data", "file_data"}
+CACHE_LARGE_STRING_MIN_CHARS = 1_024
+CACHE_HASHED_STRING_MARKER = "__hy_chat_hashed_string__"
+
+
+def _hashed_string_payload(value: str) -> JsonObject:
+    return {
+        CACHE_HASHED_STRING_MARKER: True,
+        "sha256": hashlib.sha256(value.encode("utf-8")).hexdigest(),
+        "chars": len(value),
+    }
+
+
+def _cache_key_payload(value: object, field_name: str | None = None) -> JsonValue:
+    if value is None or isinstance(value, (int, float, bool)):
+        return value
+    if isinstance(value, str):
+        if field_name in CACHE_BINARY_FIELD_NAMES or (
+            len(value) >= CACHE_LARGE_STRING_MIN_CHARS
+        ):
+            return _hashed_string_payload(value)
+        return value
+    if isinstance(value, Mapping):
+        return {
+            str(key): _cache_key_payload(item, str(key))
+            for key, item in value.items()
+        }
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+        return [_cache_key_payload(item) for item in value]
+    if isinstance(value, BaseModel):
+        return _cache_key_payload(value.model_dump())
+    return _cache_key_payload(str(value), field_name)
 
 
 def _message_payload(message: BaseMessage | Mapping[str, object]) -> JsonObject:
@@ -33,12 +66,12 @@ def _message_payload(message: BaseMessage | Mapping[str, object]) -> JsonObject:
 
     payload: JsonObject = {
         "type": message_type,
-        "content": safe_json(content),
+        "content": _cache_key_payload(content),
     }
     if name:
         payload["name"] = str(name)
     if tool_calls:
-        payload["tool_calls"] = safe_json(tool_calls)
+        payload["tool_calls"] = _cache_key_payload(tool_calls)
     if tool_call_id:
         payload["tool_call_id"] = str(tool_call_id)
     return payload

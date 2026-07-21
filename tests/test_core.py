@@ -376,6 +376,44 @@ def test_policy_middleware_does_not_cache_tool_call_response(monkeypatch):
         engine.dispose()
 
 
+def test_chat_response_cache_payload_hashes_large_binary_blocks():
+    payload = chat_cache_module._message_payload(
+        HumanMessage(
+            content=[
+                {"type": "text", "text": "识别图片里的文字"},
+                {
+                    "type": "image",
+                    "mimeType": "image/png",
+                    "data": "a" * 2048,
+                },
+            ]
+        )
+    )
+
+    image_block = payload["content"][1]
+    assert image_block["data"][chat_cache_module.CACHE_HASHED_STRING_MARKER] is True
+    assert image_block["data"]["chars"] == 2048
+    assert image_block["data"]["sha256"]
+
+
+def test_chat_response_cache_key_uses_full_hash_for_large_strings():
+    prefix = "a" * 2048
+    first_key = chat_cache_module.build_cache_key(
+        "user-1",
+        "glm-5.2",
+        [HumanMessage(content=[{"type": "image", "data": prefix + "x"}])],
+    )
+    second_key = chat_cache_module.build_cache_key(
+        "user-1",
+        "glm-5.2",
+        [HumanMessage(content=[{"type": "image", "data": prefix + "y"}])],
+    )
+
+    assert first_key
+    assert second_key
+    assert first_key != second_key
+
+
 def test_mock_graph_keeps_selected_model():
     model = resolve_model(None)
     result = _build_mock_graph().invoke(

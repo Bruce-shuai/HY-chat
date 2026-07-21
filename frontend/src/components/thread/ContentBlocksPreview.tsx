@@ -14,12 +14,12 @@ interface ContentBlocksPreviewProps {
  * Renders a preview of content blocks with optional remove functionality.
  * Uses cn utility for robust class merging.
  */
-export const ContentBlocksPreview: React.FC<ContentBlocksPreviewProps> = ({
+export const ContentBlocksPreview = React.memo(function ContentBlocksPreview({
   blocks,
   onRemove,
   size = "md",
   className,
-}) => {
+}: ContentBlocksPreviewProps) {
   if (!blocks.length) return null;
   return (
     <div className={cn("flex flex-wrap gap-2 p-3.5 pb-0", className)}>
@@ -34,4 +34,4 @@ export const ContentBlocksPreview: React.FC<ContentBlocksPreviewProps> = ({
       ))}
     </div>
   );
-};
+});

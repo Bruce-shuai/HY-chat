@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+import hashlib
 from pydantic import BaseModel
 
 from app.core.constants import DEFAULT_TRACE_PAYLOAD_MAX_CHARS
@@ -8,6 +9,8 @@ from app.core.types import JsonObject, JsonValue
 from app.db.models import TraceSpan
 
 REDACTED_VALUE = "[REDACTED]"
+BINARY_FIELD_NAMES = {"base64", "data", "file_data"}
+BINARY_FIELD_MIN_CHARS = 512
 SENSITIVE_FIELD_NAMES = {
     "api_key",
     "apikey",
@@ -28,6 +31,15 @@ def _is_sensitive_field(key: object) -> bool:
     return normalized in SENSITIVE_FIELD_NAMES or normalized.endswith("_secret")
 
 
+def _large_binary_summary(value: str) -> JsonObject:
+    return {
+        "redacted": True,
+        "reason": "large-binary-field",
+        "sha256": hashlib.sha256(value.encode("utf-8")).hexdigest(),
+        "chars": len(value),
+    }
+
+
 def safe_json(
     value: object,
     max_length: int = DEFAULT_TRACE_PAYLOAD_MAX_CHARS,
@@ -37,14 +49,20 @@ def safe_json(
             return value[:max_length] + "…"
         return value
     if isinstance(value, Mapping):
-        return {
-            str(key): (
-                REDACTED_VALUE
-                if _is_sensitive_field(key)
-                else safe_json(item, max_length)
-            )
-            for key, item in value.items()
-        }
+        result: JsonObject = {}
+        for key, item in value.items():
+            field_name = str(key)
+            if _is_sensitive_field(key):
+                result[field_name] = REDACTED_VALUE
+            elif (
+                field_name in BINARY_FIELD_NAMES
+                and isinstance(item, str)
+                and len(item) >= BINARY_FIELD_MIN_CHARS
+            ):
+                result[field_name] = _large_binary_summary(item)
+            else:
+                result[field_name] = safe_json(item, max_length)
+        return result
     if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
         return [safe_json(item, max_length) for item in value]
     if isinstance(value, BaseModel):

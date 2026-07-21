@@ -98,6 +98,16 @@ const CODE_EXTENSION_LANGUAGE: Record<string, string> = {
 };
 
 const TEXT_FILE_MAX_CHARS = 60_000;
+const IMAGE_MAX_EDGE_PX = 1600;
+const IMAGE_OPTIMIZE_MIN_BYTES = 512 * 1024;
+const IMAGE_COMPRESS_QUALITY = 0.88;
+
+type Base64Payload = {
+  data: string;
+  mimeType: string;
+  size: number;
+  optimized: boolean;
+};
 
 export const UPLOAD_ATTACHMENT_ACCEPT = [
   ...SUPPORTED_IMAGE_TYPES,
@@ -166,6 +176,92 @@ export function isSupportedTextFile(file: File) {
   );
 }
 
+function imageDimensions(width: number, height: number) {
+  const largestEdge = Math.max(width, height);
+  if (largestEdge <= IMAGE_MAX_EDGE_PX) return { width, height };
+
+  const scale = IMAGE_MAX_EDGE_PX / largestEdge;
+  return {
+    width: Math.max(1, Math.round(width * scale)),
+    height: Math.max(1, Math.round(height * scale)),
+  };
+}
+
+function loadImage(file: File): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const image = new window.Image();
+    image.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(image);
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("图片读取失败"));
+    };
+    image.src = url;
+  });
+}
+
+function canvasToBlob(
+  canvas: HTMLCanvasElement,
+  type: string,
+  quality: number,
+): Promise<Blob | null> {
+  return new Promise((resolve) => canvas.toBlob(resolve, type, quality));
+}
+
+async function imageToBase64Payload(file: File): Promise<Base64Payload> {
+  const original = async (): Promise<Base64Payload> => ({
+    data: await fileToBase64(file),
+    mimeType: file.type,
+    size: file.size,
+    optimized: false,
+  });
+
+  if (file.type === "image/gif") return original();
+
+  try {
+    const image = await loadImage(file);
+    const { width, height } = imageDimensions(
+      image.naturalWidth || image.width,
+      image.naturalHeight || image.height,
+    );
+    const shouldResize =
+      width !== (image.naturalWidth || image.width) ||
+      height !== (image.naturalHeight || image.height);
+    const shouldCompress = file.size >= IMAGE_OPTIMIZE_MIN_BYTES;
+
+    if (!shouldResize && !shouldCompress) return original();
+
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d");
+    if (!context) return original();
+
+    context.fillStyle = "#fff";
+    context.fillRect(0, 0, width, height);
+    context.drawImage(image, 0, 0, width, height);
+
+    const blob = await canvasToBlob(
+      canvas,
+      "image/jpeg",
+      IMAGE_COMPRESS_QUALITY,
+    );
+    if (!blob || blob.size >= file.size) return original();
+
+    return {
+      data: await fileToBase64(blob),
+      mimeType: blob.type || "image/jpeg",
+      size: blob.size,
+      optimized: true,
+    };
+  } catch {
+    return original();
+  }
+}
+
 function makeMarkdownCodeFence(code: string) {
   const longestFence = code
     .match(/`{3,}/g)
@@ -209,16 +305,23 @@ export async function fileToContentBlock(
     return textFileToContentBlock(file);
   }
 
-  const data = await fileToBase64(file);
-
   if (SUPPORTED_IMAGE_TYPES.includes(file.type)) {
+    const payload = await imageToBase64Payload(file);
     return {
       type: "image",
-      mimeType: file.type,
-      data,
-      metadata: { name: file.name },
+      mimeType: payload.mimeType,
+      data: payload.data,
+      metadata: {
+        name: file.name,
+        originalMimeType: file.type,
+        originalSize: file.size,
+        size: payload.size,
+        optimized: payload.optimized,
+      },
     };
   }
+
+  const data = await fileToBase64(file);
 
   // PDF
   return {
@@ -230,7 +333,7 @@ export async function fileToContentBlock(
 }
 
 // Helper to convert File to base64 string
-export async function fileToBase64(file: File): Promise<string> {
+export async function fileToBase64(file: Blob): Promise<string> {
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.onloadend = () => {

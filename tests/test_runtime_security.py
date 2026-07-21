@@ -95,6 +95,21 @@ def test_trace_payload_redacts_common_credentials_recursively():
     }
 
 
+def test_trace_payload_summarizes_large_binary_fields():
+    payload = safe_json(
+        {
+            "type": "image",
+            "mimeType": "image/png",
+            "data": "a" * 600,
+        }
+    )
+
+    assert payload["data"]["redacted"] is True
+    assert payload["data"]["reason"] == "large-binary-field"
+    assert payload["data"]["chars"] == 600
+    assert payload["data"]["sha256"]
+
+
 def test_model_authorization_does_not_consume_rpm_and_token_updates_are_atomic(
     monkeypatch,
 ):

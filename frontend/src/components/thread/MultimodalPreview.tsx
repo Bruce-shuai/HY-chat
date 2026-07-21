@@ -12,13 +12,13 @@ export interface MultimodalPreviewProps {
   size?: "sm" | "md" | "lg";
 }
 
-export const MultimodalPreview: React.FC<MultimodalPreviewProps> = ({
+export const MultimodalPreview = React.memo(function MultimodalPreview({
   block,
   removable = false,
   onRemove,
   className,
   size = "md",
-}) => {
+}: MultimodalPreviewProps) {
   if (isTextContentBlock(block)) {
     const filename =
       block.metadata?.filename || block.metadata?.name || "代码或文本文件";
@@ -154,4 +154,4 @@ export const MultimodalPreview: React.FC<MultimodalPreviewProps> = ({
       )}
     </div>
   );
-};
+});
