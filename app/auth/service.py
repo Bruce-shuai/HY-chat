@@ -1,21 +1,24 @@
 from __future__ import annotations
 
+import hashlib
 import logging
+import secrets
 import uuid
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import TypedDict, cast
 
 import jwt
 from jwt.exceptions import InvalidTokenError
 from pwdlib import PasswordHash
+from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.auth.types import TokenType
 from app.core.config import get_settings
 from app.core.types import UserRole
-from app.db.models import User, UserPolicy
+from app.db.models import PasswordResetToken, User, UserPolicy
 
 settings = get_settings()
 password_hash = PasswordHash.recommended()
@@ -36,6 +39,14 @@ class TokenPayload(TypedDict):
     jti: str
 
 
+@dataclass(frozen=True)
+class PasswordResetIssue:
+    user_id: str
+    email: str
+    display_name: str
+    token: str
+
+
 def _next_quota_reset(now: datetime | None = None) -> datetime:
     current = now or datetime.utcnow()
     if current.month == 12:
@@ -49,6 +60,10 @@ def hash_password(password: str) -> str:
 
 def verify_password(password: str, encoded: str) -> bool:
     return password_hash.verify(password, encoded)
+
+
+def _hash_reset_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
 def _should_bootstrap_admin(db: Session, normalized_email: str) -> bool:
@@ -109,6 +124,85 @@ def authenticate_user(db: Session, email: str, password: str) -> User:
     db.commit()
     db.refresh(user)
     logger.info("User authenticated user_id=%s role=%s", user.id, user.role.value)
+    return user
+
+
+def change_user_password(
+    db: Session,
+    user: User,
+    current_password: str,
+    new_password: str,
+) -> User:
+    if not verify_password(current_password, user.password_hash):
+        raise AuthenticationError("当前密码不正确")
+    user.password_hash = hash_password(new_password)
+    user.token_version += 1
+    user.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(user)
+    logger.info("User password changed user_id=%s", user.id)
+    return user
+
+
+def create_password_reset_issue(
+    db: Session,
+    email: str,
+) -> PasswordResetIssue | None:
+    user = db.scalar(select(User).where(User.email == email.strip().lower()))
+    if not user or not user.is_active:
+        return None
+
+    token = secrets.token_urlsafe(32)
+    now = datetime.utcnow()
+    expires_at = now + timedelta(minutes=settings.password_reset_token_minutes)
+    db.execute(delete(PasswordResetToken).where(PasswordResetToken.expires_at <= now))
+    db.execute(
+        delete(PasswordResetToken).where(
+            PasswordResetToken.user_id == user.id,
+            PasswordResetToken.used_at.is_(None),
+        )
+    )
+    db.add(
+        PasswordResetToken(
+            user_id=user.id,
+            token_hash=_hash_reset_token(token),
+            expires_at=expires_at,
+            created_at=now,
+        )
+    )
+    db.commit()
+    logger.info("Password reset requested user_id=%s", user.id)
+    return PasswordResetIssue(
+        user_id=user.id,
+        email=user.email,
+        display_name=user.display_name,
+        token=token,
+    )
+
+
+def reset_password_with_token(db: Session, token: str, new_password: str) -> User:
+    now = datetime.utcnow()
+    reset_token = db.scalar(
+        select(PasswordResetToken).where(
+            PasswordResetToken.token_hash == _hash_reset_token(token.strip()),
+            PasswordResetToken.used_at.is_(None),
+            PasswordResetToken.expires_at > now,
+        )
+    )
+    if not reset_token:
+        raise AuthenticationError("重置链接无效或已过期")
+
+    user = db.get(User, reset_token.user_id)
+    if not user or not user.is_active:
+        raise AuthenticationError("用户不存在或已被停用")
+
+    user.password_hash = hash_password(new_password)
+    user.token_version += 1
+    user.updated_at = now
+    reset_token.used_at = now
+    db.commit()
+    db.refresh(user)
+    logger.info("Password reset completed user_id=%s", user.id)
     return user
 
 

@@ -35,6 +35,12 @@ type Account = {
   user: AuthUser;
 };
 
+export type PasswordResetRequestResult = {
+  status: "ok";
+  email_configured: boolean;
+  reset_token?: string | null;
+};
+
 type AuthContextValue = {
   ready: boolean;
   user: AuthUser | null;
@@ -46,6 +52,12 @@ type AuthContextValue = {
     password: string,
     displayName: string,
   ) => Promise<void>;
+  changePassword: (
+    currentPassword: string,
+    newPassword: string,
+  ) => Promise<void>;
+  requestPasswordReset: (email: string) => Promise<PasswordResetRequestResult>;
+  resetPassword: (token: string, newPassword: string) => Promise<void>;
   switchAccount: (userId: string) => void;
   logout: () => void;
   logoutAll: () => Promise<void>;
@@ -93,6 +105,15 @@ function isAccount(value: unknown): value is Account {
     typeof user.created_at === "string" &&
     isPolicy(user.policy)
   );
+}
+
+function errorMessageFromDetail(detail: unknown, fallback: string) {
+  if (typeof detail === "string" && detail.trim()) return detail;
+  if (Array.isArray(detail) && detail.length > 0) {
+    const first = detail[0] as { msg?: unknown } | undefined;
+    if (typeof first?.msg === "string" && first.msg.trim()) return first.msg;
+  }
+  return fallback;
 }
 
 function safeGetLocalStorage(key: string): string | null {
@@ -235,8 +256,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.detail || "认证失败");
+      const result = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(errorMessageFromDetail(result?.detail, "认证失败"));
+      }
       if (!isAccount(result)) throw new Error("登录返回数据异常");
       saveAccount(result);
     },
@@ -314,6 +337,69 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     logout();
   };
 
+  const changePassword = async (
+    currentPassword: string,
+    newPassword: string,
+  ) => {
+    const response = await authFetch(`${backendUrl()}/auth/password/change`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        current_password: currentPassword,
+        new_password: newPassword,
+      }),
+    });
+    const result = await response.json().catch(() => null);
+    if (!response.ok) {
+      throw new Error(errorMessageFromDetail(result?.detail, "修改密码失败"));
+    }
+    if (!isAccount(result)) throw new Error("修改密码返回数据异常");
+    saveAccount(result);
+  };
+
+  const requestPasswordReset = async (email: string) => {
+    const response = await fetch(
+      `${backendUrl()}/auth/password-reset/request`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      },
+    );
+    const result = await response.json().catch(() => null);
+    if (!response.ok) {
+      throw new Error(
+        errorMessageFromDetail(result?.detail, "找回密码请求失败"),
+      );
+    }
+    return {
+      status: "ok" as const,
+      email_configured: Boolean(result?.email_configured),
+      reset_token:
+        typeof result?.reset_token === "string" ? result.reset_token : null,
+    };
+  };
+
+  const resetPassword = async (token: string, newPassword: string) => {
+    const response = await fetch(
+      `${backendUrl()}/auth/password-reset/confirm`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token,
+          new_password: newPassword,
+        }),
+      },
+    );
+    const result = await response.json().catch(() => null);
+    if (!response.ok) {
+      throw new Error(errorMessageFromDetail(result?.detail, "重置密码失败"));
+    }
+    if (!isAccount(result)) throw new Error("重置密码返回数据异常");
+    saveAccount(result);
+  };
+
   const value: AuthContextValue = {
     ready,
     user: account?.user || null,
@@ -326,6 +412,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         password,
         display_name: displayName,
       }),
+    changePassword,
+    requestPasswordReset,
+    resetPassword,
     switchAccount,
     logout,
     logoutAll,

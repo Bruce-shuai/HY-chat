@@ -4,6 +4,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+import app.auth.service as auth_service
 from app.db.session import Base, get_db
 from app.main import app
 from app.storage.service import storage
@@ -178,6 +179,139 @@ async def test_auth_roles_policy_and_token_revocation(tmp_path, monkeypatch):
                 headers={"Authorization": f"Bearer {admin_token}"},
             )
             assert len(remaining_users.json()["users"]) == 1
+    finally:
+        app.dependency_overrides.clear()
+        Base.metadata.drop_all(engine)
+        engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_password_change_and_reset_flows(tmp_path, monkeypatch):
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(engine)
+    monkeypatch.setattr(storage, "backend", "local")
+    monkeypatch.setattr(storage, "local_root", tmp_path / "storage")
+    monkeypatch.setattr(auth_service.settings, "app_env", "local")
+    monkeypatch.setattr(auth_service.settings, "password_reset_expose_token", True)
+    testing_session = sessionmaker(bind=engine, expire_on_commit=False)
+
+    def override_db():
+        db = testing_session()
+        try:
+            yield db
+        finally:
+            db.close()
+
+    app.dependency_overrides[get_db] = override_db
+    transport = httpx.ASGITransport(app=app)
+    try:
+        async with httpx.AsyncClient(
+            transport=transport, base_url="http://test"
+        ) as client:
+            registered = await client.post(
+                "/auth/register",
+                json={
+                    "email": "owner@example.com",
+                    "password": "secure-password",
+                    "display_name": "Owner",
+                },
+            )
+            assert registered.status_code == 201
+            access_token = registered.json()["access_token"]
+
+            wrong_current = await client.post(
+                "/auth/password/change",
+                headers={"Authorization": f"Bearer {access_token}"},
+                json={
+                    "current_password": "wrong-password",
+                    "new_password": "stronger-password",
+                },
+            )
+            assert wrong_current.status_code == 400
+
+            changed = await client.post(
+                "/auth/password/change",
+                headers={"Authorization": f"Bearer {access_token}"},
+                json={
+                    "current_password": "secure-password",
+                    "new_password": "stronger-password",
+                },
+            )
+            assert changed.status_code == 200
+            changed_token = changed.json()["access_token"]
+
+            stale_me = await client.get(
+                "/auth/me",
+                headers={"Authorization": f"Bearer {access_token}"},
+            )
+            assert stale_me.status_code == 401
+
+            old_login = await client.post(
+                "/auth/login",
+                json={"email": "owner@example.com", "password": "secure-password"},
+            )
+            assert old_login.status_code == 401
+
+            new_login = await client.post(
+                "/auth/login",
+                json={"email": "owner@example.com", "password": "stronger-password"},
+            )
+            assert new_login.status_code == 200
+
+            missing_reset = await client.post(
+                "/auth/password-reset/request",
+                json={"email": "missing@example.com"},
+            )
+            assert missing_reset.status_code == 200
+            assert missing_reset.json()["reset_token"] is None
+
+            reset_request = await client.post(
+                "/auth/password-reset/request",
+                json={"email": "OWNER@example.com"},
+            )
+            assert reset_request.status_code == 200
+            reset_token = reset_request.json()["reset_token"]
+            assert reset_token
+
+            reset = await client.post(
+                "/auth/password-reset/confirm",
+                json={
+                    "token": reset_token,
+                    "new_password": "reset-password",
+                },
+            )
+            assert reset.status_code == 200
+
+            stale_after_reset = await client.get(
+                "/auth/me",
+                headers={"Authorization": f"Bearer {changed_token}"},
+            )
+            assert stale_after_reset.status_code == 401
+
+            reused_reset = await client.post(
+                "/auth/password-reset/confirm",
+                json={
+                    "token": reset_token,
+                    "new_password": "another-password",
+                },
+            )
+            assert reused_reset.status_code == 401
+
+            changed_password_login = await client.post(
+                "/auth/login",
+                json={"email": "owner@example.com", "password": "stronger-password"},
+            )
+            assert changed_password_login.status_code == 401
+
+            reset_password_login = await client.post(
+                "/auth/login",
+                json={"email": "owner@example.com", "password": "reset-password"},
+            )
+            assert reset_password_login.status_code == 200
     finally:
         app.dependency_overrides.clear()
         Base.metadata.drop_all(engine)

@@ -1,7 +1,8 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { LoaderCircle, UserRound } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/providers/Auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,26 +14,93 @@ function getLoginErrorMessage(reason: unknown) {
   return /[\u4e00-\u9fff]/.test(message) ? message : "认证失败，请稍后重试。";
 }
 
+type AuthMode = "login" | "register" | "reset-request" | "reset-confirm";
+
+const modeCopy: Record<
+  AuthMode,
+  { title: string; description: string; button: string }
+> = {
+  login: {
+    title: "欢迎回来",
+    description: "登录后继续使用你的会话、知识库和工具权限。",
+    button: "登录",
+  },
+  register: {
+    title: "创建账号",
+    description: "首个注册账号会自动获得管理员权限。",
+    button: "注册并登录",
+  },
+  "reset-request": {
+    title: "找回密码",
+    description: "输入注册邮箱后，系统会发送一次性密码重置链接。",
+    button: "发送重置链接",
+  },
+  "reset-confirm": {
+    title: "重置密码",
+    description: "设置新密码后，旧登录凭证会自动失效。",
+    button: "重置并登录",
+  },
+};
+
 export function LoginScreen() {
-  const { login, register, accounts, switchAccount } = useAuth();
-  const [mode, setMode] = useState<"login" | "register">("login");
+  const {
+    login,
+    register,
+    requestPasswordReset,
+    resetPassword,
+    accounts,
+    switchAccount,
+  } = useAuth();
+  const searchParams = useSearchParams();
+  const resetTokenParam = searchParams.get("resetToken") || "";
+  const [mode, setMode] = useState<AuthMode>("login");
+  const [resetToken, setResetToken] = useState(resetTokenParam);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+
+  useEffect(() => {
+    if (!resetTokenParam) return;
+    setResetToken(resetTokenParam);
+    setMode("reset-confirm");
+  }, [resetTokenParam]);
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setLoading(true);
     setError("");
+    setNotice("");
     const form = new FormData(event.currentTarget);
     try {
       if (mode === "login") {
         await login(String(form.get("email")), String(form.get("password")));
-      } else {
+      } else if (mode === "register") {
         await register(
           String(form.get("email")),
           String(form.get("password")),
           String(form.get("displayName")),
         );
+      } else if (mode === "reset-request") {
+        const result = await requestPasswordReset(String(form.get("email")));
+        if (result.reset_token) {
+          setResetToken(result.reset_token);
+          setMode("reset-confirm");
+          setNotice("已生成本地调试用重置口令，请设置新密码。");
+        } else {
+          setNotice(
+            result.email_configured
+              ? "如果该邮箱存在，你会收到一封密码重置邮件。"
+              : "请求已提交。如果没有收到邮件，请联系管理员确认邮件服务配置。",
+          );
+        }
+      } else {
+        const password = String(form.get("password"));
+        const confirmPassword = String(form.get("confirmPassword"));
+        const token = String(form.get("token") || resetToken);
+        if (password !== confirmPassword) {
+          throw new Error("两次输入的新密码不一致");
+        }
+        await resetPassword(token, password);
       }
     } catch (reason) {
       console.error("认证失败", reason);
@@ -72,22 +140,22 @@ export function LoginScreen() {
               />
             </div>
           </div>
-          <div className="bg-muted mb-6 flex rounded-xl p-1">
-            {(["login", "register"] as const).map((item) => (
-              <button
-                key={item}
-                onClick={() => setMode(item)}
-                className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium ${mode === item ? "bg-background shadow-sm" : "text-muted-foreground"}`}
-              >
-                {item === "login" ? "登录" : "注册"}
-              </button>
-            ))}
-          </div>
-          <h2 className="text-2xl font-semibold">
-            {mode === "login" ? "欢迎回来" : "创建账号"}
-          </h2>
+          {mode === "login" || mode === "register" ? (
+            <div className="bg-muted mb-6 flex rounded-xl p-1">
+              {(["login", "register"] as const).map((item) => (
+                <button
+                  key={item}
+                  onClick={() => setMode(item)}
+                  className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium ${mode === item ? "bg-background shadow-sm" : "text-muted-foreground"}`}
+                >
+                  {item === "login" ? "登录" : "注册"}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          <h2 className="text-2xl font-semibold">{modeCopy[mode].title}</h2>
           <p className="text-muted-foreground mt-1 text-sm">
-            首个注册账号会自动获得管理员权限。
+            {modeCopy[mode].description}
           </p>
           <form
             onSubmit={submit}
@@ -100,18 +168,44 @@ export function LoginScreen() {
                 required
               />
             )}
-            <Input
-              name="email"
-              type="email"
-              placeholder="邮箱"
-              required
-            />
-            <PasswordInput
-              name="password"
-              placeholder="密码（至少 8 位）"
-              minLength={mode === "register" ? 8 : 1}
-              required
-            />
+            {mode !== "reset-confirm" && (
+              <Input
+                name="email"
+                type="email"
+                placeholder="邮箱"
+                required
+              />
+            )}
+            {mode === "reset-confirm" && (
+              <Input
+                name="token"
+                value={resetToken}
+                onChange={(event) => setResetToken(event.target.value)}
+                placeholder="重置口令"
+                required
+              />
+            )}
+            {mode !== "reset-request" && (
+              <PasswordInput
+                name="password"
+                placeholder={
+                  mode === "reset-confirm"
+                    ? "新密码（至少 8 位）"
+                    : "密码（至少 8 位）"
+                }
+                minLength={mode === "login" ? 1 : 8}
+                required
+              />
+            )}
+            {mode === "reset-confirm" && (
+              <PasswordInput
+                name="confirmPassword"
+                placeholder="确认新密码"
+                minLength={8}
+                required
+              />
+            )}
+            {notice && <p className="text-sm text-emerald-700">{notice}</p>}
             {error && <p className="text-sm text-red-600">{error}</p>}
             <Button
               className="w-full"
@@ -119,10 +213,38 @@ export function LoginScreen() {
               disabled={loading}
             >
               {loading && <LoaderCircle className="animate-spin" />}
-              {mode === "login" ? "登录" : "注册并登录"}
+              {modeCopy[mode].button}
             </Button>
           </form>
-          {accounts.length > 0 && (
+          <div className="mt-4 flex justify-center">
+            {mode === "login" ? (
+              <button
+                type="button"
+                className="text-muted-foreground hover:text-foreground text-sm"
+                onClick={() => {
+                  setError("");
+                  setNotice("");
+                  setMode("reset-request");
+                }}
+              >
+                忘记密码？
+              </button>
+            ) : null}
+            {mode === "reset-request" || mode === "reset-confirm" ? (
+              <button
+                type="button"
+                className="text-muted-foreground hover:text-foreground text-sm"
+                onClick={() => {
+                  setError("");
+                  setNotice("");
+                  setMode("login");
+                }}
+              >
+                返回登录
+              </button>
+            ) : null}
+          </div>
+          {accounts.length > 0 && mode !== "reset-confirm" && (
             <div className="mt-8 border-t pt-5">
               <p className="text-muted-foreground mb-3 text-xs font-medium tracking-wide uppercase">
                 已保存账号

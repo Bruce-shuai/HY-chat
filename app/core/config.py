@@ -36,6 +36,28 @@ class Settings(BaseSettings):
     jwt_access_token_minutes: int = Field(default=30, alias="JWT_ACCESS_TOKEN_MINUTES")
     jwt_refresh_token_days: int = Field(default=30, alias="JWT_REFRESH_TOKEN_DAYS")
     initial_admin_email: str = Field(default="", alias="INITIAL_ADMIN_EMAIL")
+    password_reset_token_minutes: int = Field(
+        default=30,
+        ge=1,
+        le=1440,
+        alias="PASSWORD_RESET_TOKEN_MINUTES",
+    )
+    password_reset_base_url: str = Field(
+        default="http://localhost:3000",
+        alias="PASSWORD_RESET_BASE_URL",
+    )
+    password_reset_expose_token: bool = Field(
+        default=False,
+        alias="PASSWORD_RESET_EXPOSE_TOKEN",
+    )
+    smtp_host: str = Field(default="", alias="SMTP_HOST")
+    smtp_port: int = Field(default=587, ge=1, le=65535, alias="SMTP_PORT")
+    smtp_username: str = Field(default="", alias="SMTP_USERNAME")
+    smtp_password: str = Field(default="", alias="SMTP_PASSWORD")
+    smtp_from_email: str = Field(default="", alias="SMTP_FROM_EMAIL")
+    smtp_use_tls: bool = Field(default=True, alias="SMTP_USE_TLS")
+    smtp_use_ssl: bool = Field(default=False, alias="SMTP_USE_SSL")
+    smtp_timeout: float = Field(default=10.0, gt=0, alias="SMTP_TIMEOUT")
     default_rpm_limit: int = Field(default=30, alias="DEFAULT_RPM_LIMIT")
     default_monthly_token_quota: int = Field(
         default=1_000_000,
@@ -161,6 +183,21 @@ class Settings(BaseSettings):
     @property
     def s3_enabled(self) -> bool:
         return self.storage_backend.lower() == "s3" and bool(self.s3_bucket)
+
+    @property
+    def password_reset_email_configured(self) -> bool:
+        return bool(
+            self.smtp_host.strip()
+            and self.smtp_from_email.strip()
+            and self.password_reset_base_url.strip()
+        )
+
+    @property
+    def can_expose_password_reset_token(self) -> bool:
+        return (
+            self.password_reset_expose_token
+            and self.app_env.strip().lower() not in PRODUCTION_ENVIRONMENTS
+        )
 
 
 def validate_runtime_settings(settings: Settings) -> None:
