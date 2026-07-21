@@ -60,9 +60,9 @@ function ArgsRenderer({ args }: { args: Record<string, unknown> }) {
             <p className="text-muted-foreground text-sm leading-[18px] text-wrap">
               {prettifyText(key)}
             </p>
-            <span className="text-foreground w-full max-w-full rounded-md bg-zinc-100 p-3 text-[13px] leading-[18px]">
+            <div className="text-foreground w-full max-w-full overflow-hidden rounded-md bg-zinc-100 p-3 text-[13px] leading-[18px] break-words [overflow-wrap:anywhere]">
               <MarkdownText>{stringValue}</MarkdownText>
-            </span>
+            </div>
           </div>
         );
       })}
@@ -353,8 +353,8 @@ export function InboxItemInput({
   const primaryButtonText = primarySubmitType === "edit" ? "提交修改" : "批准";
 
   return (
-    <div className="flex w-full max-w-full flex-col items-start justify-start gap-2">
-      <section className="border-border bg-background flex w-full flex-col gap-6 rounded-lg border p-5 shadow-sm">
+    <div className="flex w-full max-w-full min-w-0 flex-col items-start justify-start gap-2">
+      <section className="border-border bg-background flex w-full min-w-0 flex-col gap-4 rounded-lg border p-3 shadow-sm sm:gap-6 sm:p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
             <h3 className="text-lg font-semibold">审核工具调用</h3>
@@ -422,11 +422,11 @@ export function InboxItemInput({
               }
               className="mt-0.5 h-4 w-4 accent-[#2F6868]"
             />
-            <span className="flex flex-col gap-0.5">
+            <span className="flex min-w-0 flex-col gap-0.5">
               <span className="font-medium">
                 以后{prettifyText(actionName)}不再询问
               </span>
-              <span className="text-muted-foreground">
+              <span className="text-muted-foreground leading-5">
                 开启后，后续{prettifyText(actionName)}会在本浏览器自动批准。
               </span>
             </span>
@@ -454,20 +454,20 @@ export function InboxItemInput({
           </div>
         )}
 
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
-          <div className="text-muted-foreground text-xs">
+        <div className="flex w-full flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="text-muted-foreground text-xs leading-5">
             {isLoading
               ? "正在提交处理结果..."
               : selectedSubmitType && supportsMultipleMethods
                 ? `当前处理：${prettifyText(selectedSubmitType)}`
                 : "确认后会继续执行工具并生成回答。"}
           </div>
-          <div className="flex flex-wrap items-center justify-end gap-2">
+          <div className="flex w-full flex-col-reverse gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
             {isRejectAllowed &&
               (showRejectForm ? (
                 <Button
                   variant="outline"
-                  className="border-red-300 text-red-600 hover:bg-red-50 hover:text-red-700"
+                  className="w-full border-red-300 text-red-600 hover:bg-red-50 hover:text-red-700 sm:w-auto"
                   onClick={submitWithType("reject")}
                   disabled={isLoading}
                 >
@@ -477,6 +477,7 @@ export function InboxItemInput({
               ) : (
                 <Button
                   variant="outline"
+                  className="w-full sm:w-auto"
                   onClick={() => setSelectedSubmitType("reject")}
                   disabled={isLoading}
                 >
@@ -487,6 +488,7 @@ export function InboxItemInput({
             {primarySubmitType && (
               <Button
                 variant="brand"
+                className="w-full sm:w-auto"
                 onClick={submitWithType(primarySubmitType)}
                 disabled={isLoading}
               >

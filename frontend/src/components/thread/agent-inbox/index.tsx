@@ -58,7 +58,7 @@ export function ThreadView({ interrupt }: ThreadViewProps) {
   }
 
   return (
-    <div className="bg-muted/30 flex h-full w-full min-w-0 flex-col rounded-xl p-3 sm:p-5 lg:flex-row lg:rounded-2xl lg:p-8">
+    <div className="bg-muted/30 flex w-full max-w-full min-w-0 flex-col overflow-hidden rounded-xl p-3 sm:p-5 lg:flex-row lg:rounded-2xl lg:p-8">
       {showSidePanel ? (
         <StateView
           handleShowSidePanel={handleShowSidePanel}
@@ -67,7 +67,7 @@ export function ThreadView({ interrupt }: ThreadViewProps) {
           view={showState ? "state" : "description"}
         />
       ) : (
-        <div className="flex w-full flex-col gap-6">
+        <div className="flex w-full min-w-0 flex-col gap-5 sm:gap-6">
           {interrupts.length > 1 && (
             <div className="flex flex-wrap items-center gap-2">
               {interrupts.map((it, idx) => {

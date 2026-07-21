@@ -456,17 +456,21 @@ export function ThreadActionsView({
   const interruptValue = singleActionInterrupt.value as HITLRequest;
 
   return (
-    <div className="flex min-h-full w-full max-w-full flex-col gap-9">
+    <div className="flex w-full max-w-full min-w-0 flex-col gap-5 sm:gap-9">
       <div className="flex w-full flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center justify-start gap-3">
-          <p className="text-2xl tracking-tighter text-pretty">
+        <div className="flex min-w-0 flex-1 items-center justify-start gap-2 sm:gap-3">
+          <p className="min-w-0 truncate text-xl tracking-tight text-pretty sm:text-2xl sm:tracking-tighter">
             {hasMultipleActions
               ? `${currentTitle} (${currentIndex + 1}/${actionRequests.length})`
               : currentTitle}
           </p>
-          {threadId && <ThreadIdCopyable threadId={threadId} />}
+          {threadId && (
+            <div className="shrink-0">
+              <ThreadIdCopyable threadId={threadId} />
+            </div>
+          )}
         </div>
-        <div className="flex flex-row items-center justify-start gap-2">
+        <div className="flex shrink-0 flex-row items-center justify-start gap-2">
           {apiUrl && (
             <Button
               size="sm"
@@ -486,7 +490,7 @@ export function ThreadActionsView({
         </div>
       </div>
 
-      <p className="text-muted-foreground bg-muted/30 rounded-lg border px-3 py-2 text-sm">
+      <p className="text-muted-foreground bg-muted/30 rounded-lg border px-3 py-2 text-sm leading-6 sm:leading-normal">
         此工具调用需要人工确认。点击“批准”后才会真正执行工具，并继续生成回答；也可以修改参数后提交，或填写原因拒绝。
         {autoApprovalSupported
           ? ` ${currentToolLabel}支持勾选“以后不再询问”，后续会在本浏览器自动批准。`
@@ -505,10 +509,10 @@ export function ThreadActionsView({
         </div>
       )}
 
-      <div className="flex w-full flex-row flex-wrap items-center justify-start gap-2">
+      <div className="flex w-full flex-col items-stretch justify-start gap-2 sm:flex-row sm:flex-wrap sm:items-center">
         <Button
           variant="outline"
-          className="bg-background text-foreground border-gray-500 font-normal"
+          className="bg-background text-foreground border-gray-500 font-normal sm:w-auto"
           onClick={handleResolve}
           disabled={actionsDisabled}
         >
@@ -517,7 +521,7 @@ export function ThreadActionsView({
         {hasMultipleActions && allAllowApprove && (
           <Button
             variant="outline"
-            className="bg-background text-foreground border-gray-500 font-normal"
+            className="bg-background text-foreground border-gray-500 font-normal sm:w-auto"
             onClick={handleApproveAll}
             disabled={actionsDisabled}
           >
@@ -580,7 +584,7 @@ export function ThreadActionsView({
       )}
 
       {hasMultipleActions && (
-        <div className="flex w-full items-center justify-between">
+        <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex gap-2">
             <Button
               variant="outline"
@@ -605,6 +609,7 @@ export function ThreadActionsView({
           </div>
           <Button
             variant="brand"
+            className="w-full sm:w-auto"
             disabled={!hasAllDecisions || submittingAll}
             onClick={handleSubmitAll}
           >

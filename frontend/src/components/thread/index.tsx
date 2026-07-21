@@ -1,5 +1,6 @@
 import { v4 as uuidv4 } from "uuid";
-import { FormEvent, ReactNode, useEffect, useRef, useState } from "react";
+import type { CSSProperties, FormEvent, ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { useStreamContext } from "@/providers/Stream";
@@ -51,20 +52,22 @@ function StickyToBottomContent(props: {
 }) {
   const context = useStickToBottomContext();
   return (
-    <div
-      ref={context.scrollRef}
-      style={{ width: "100%", height: "100%" }}
-      className={props.className}
-    >
+    <>
       <div
-        ref={context.contentRef}
-        className={props.contentClassName}
+        ref={context.scrollRef}
+        style={{ width: "100%", height: "100%" }}
+        className={props.className}
       >
-        {props.content}
+        <div
+          ref={context.contentRef}
+          className={props.contentClassName}
+        >
+          {props.content}
+        </div>
       </div>
 
       {props.footer}
-    </div>
+    </>
   );
 }
 
@@ -106,6 +109,8 @@ export function Thread() {
   const [selectedModel, setSelectedModel] = useState("");
   const [knowledgeUploading, setKnowledgeUploading] = useState(false);
   const knowledgeInputRef = useRef<HTMLInputElement>(null);
+  const footerRef = useRef<HTMLDivElement>(null);
+  const [footerHeight, setFooterHeight] = useState(176);
   const {
     contentBlocks,
     setContentBlocks,
@@ -138,6 +143,28 @@ export function Thread() {
   });
 
   const lastError = useRef<string | undefined>(undefined);
+
+  useEffect(() => {
+    const footer = footerRef.current;
+    if (!footer) return;
+
+    const updateFooterHeight = () => {
+      const nextHeight = Math.ceil(footer.getBoundingClientRect().height);
+      setFooterHeight((currentHeight) =>
+        Math.abs(currentHeight - nextHeight) > 1 ? nextHeight : currentHeight,
+      );
+    };
+
+    updateFooterHeight();
+    const observer = new ResizeObserver(updateFooterHeight);
+    observer.observe(footer);
+    window.addEventListener("resize", updateFooterHeight);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", updateFooterHeight);
+    };
+  }, [chatStarted]);
 
   useEffect(() => {
     const backendUrl =
@@ -416,14 +443,22 @@ export function Thread() {
             </div>
           )}
 
-          <StickToBottom className="relative min-h-0 flex-1 overflow-hidden">
+          <StickToBottom
+            className="relative min-h-0 flex-1 overflow-hidden"
+            style={
+              {
+                "--thread-footer-height": `${footerHeight}px`,
+              } as CSSProperties
+            }
+          >
             <StickyToBottomContent
               className={cn(
-                "[&::-webkit-scrollbar-thumb]:bg-border absolute inset-0 overflow-y-scroll px-3 sm:px-4 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-transparent",
-                !chatStarted && "mt-[25vh] flex flex-col items-stretch",
-                chatStarted && "grid min-h-0 grid-rows-[minmax(0,1fr)_auto]",
+                "[&::-webkit-scrollbar-thumb]:bg-border absolute inset-0 overflow-y-scroll overscroll-contain px-3 sm:px-4 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-transparent",
               )}
-              contentClassName="pt-8 pb-16 max-w-3xl mx-auto flex min-h-0 flex-col gap-4 w-full"
+              contentClassName={cn(
+                "mx-auto flex min-h-full w-full max-w-3xl flex-col gap-4 pt-8 pb-[calc(var(--thread-footer-height,11rem)+1rem+env(safe-area-inset-bottom))]",
+                !chatStarted && "pt-[25vh]",
+              )}
               content={
                 <ThreadMessageList
                   firstTokenReceived={firstTokenReceived}
@@ -445,7 +480,10 @@ export function Thread() {
                 />
               }
               footer={
-                <div className="bg-background sticky bottom-0 flex shrink-0 flex-col items-center gap-3 px-2 pb-[env(safe-area-inset-bottom)] sm:gap-6 sm:px-4">
+                <div
+                  ref={footerRef}
+                  className="from-background via-background to-background/0 pointer-events-none absolute inset-x-0 bottom-0 z-20 flex flex-col items-center gap-3 bg-gradient-to-t px-2 pt-12 pb-[env(safe-area-inset-bottom)] sm:gap-6 sm:px-4 sm:pt-14"
+                >
                   {!chatStarted && (
                     <div className="flex items-center justify-center">
                       <BrandLogo
@@ -456,12 +494,12 @@ export function Thread() {
                     </div>
                   )}
 
-                  <ScrollToBottom className="animate-in fade-in-0 zoom-in-95 absolute bottom-full left-1/2 mb-4 -translate-x-1/2" />
+                  <ScrollToBottom className="animate-in fade-in-0 zoom-in-95 pointer-events-auto absolute top-2 left-1/2 -translate-x-1/2 sm:top-3" />
 
                   <div
                     ref={dropRef}
                     className={cn(
-                      "bg-muted relative z-10 mx-auto mb-2 w-full max-w-3xl rounded-xl shadow-xs transition-all sm:mb-8 sm:rounded-2xl",
+                      "bg-muted pointer-events-auto relative z-10 mx-auto mb-2 w-full max-w-3xl rounded-xl shadow-xs transition-all sm:mb-8 sm:rounded-2xl",
                       chatStarted &&
                         "max-h-[58dvh] overflow-hidden sm:max-h-[52dvh]",
                       dragOver
