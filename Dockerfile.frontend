@@ -1,13 +1,20 @@
 FROM public.ecr.aws/docker/library/node:22-alpine AS dependencies
 
 WORKDIR /app
+ARG NPM_REGISTRY=https://registry.npmmirror.com
+ENV COREPACK_NPM_REGISTRY=${NPM_REGISTRY} \
+    npm_config_registry=${NPM_REGISTRY}
 RUN corepack enable
 COPY frontend/package.json frontend/pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile
+RUN pnpm config set registry "${NPM_REGISTRY}" \
+    && pnpm install --frozen-lockfile
 
 FROM public.ecr.aws/docker/library/node:22-alpine AS builder
 
 WORKDIR /app
+ARG NPM_REGISTRY=https://registry.npmmirror.com
+ENV COREPACK_NPM_REGISTRY=${NPM_REGISTRY} \
+    npm_config_registry=${NPM_REGISTRY}
 RUN corepack enable
 ARG NEXT_PUBLIC_API_URL=/api
 ARG NEXT_PUBLIC_ASSISTANT_ID=hy-chat
