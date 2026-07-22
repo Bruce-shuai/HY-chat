@@ -24,6 +24,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { useAuth } from "@/providers/Auth";
 import { ADMIN_CONTACT_TEXT } from "@/lib/admin-contact";
 import { cn } from "@/lib/utils";
+import { backendUrl } from "@/lib/backend-url";
 
 type AgentRunSummary = {
   id: string;
@@ -74,10 +75,6 @@ const TOOL_LABELS: Record<string, string> = {
   read_file: "读取文件",
   search_code: "搜索代码",
 };
-
-function backendUrl() {
-  return process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
-}
 
 function formatDate(value: string) {
   const date = new Date(value);

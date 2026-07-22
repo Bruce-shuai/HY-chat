@@ -8,6 +8,7 @@ import React, {
   useEffect,
   useState,
 } from "react";
+import { backendUrl } from "@/lib/backend-url";
 
 export type Policy = {
   allowed_models: string[];
@@ -70,10 +71,6 @@ type AuthContextValue = {
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 const ACCOUNTS_KEY = "hy-chat:accounts";
 const ACTIVE_KEY = "hy-chat:active-account";
-
-function backendUrl() {
-  return process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
-}
 
 function isPolicy(value: unknown): value is Policy {
   if (!value || typeof value !== "object") return false;

@@ -20,6 +20,7 @@ import { Input } from "@/components/ui/input";
 import { Toaster } from "@/components/ui/sonner";
 import { AuthUser, useAuth } from "@/providers/Auth";
 import { ADMIN_CONTACT_TEXT } from "@/lib/admin-contact";
+import { backendUrl } from "@/lib/backend-url";
 
 type Stats = {
   users: number;
@@ -48,8 +49,7 @@ function AdminContent() {
   );
   const [savingUserId, setSavingUserId] = useState<string | null>(null);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
-  const backend =
-    process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
+  const backend = backendUrl();
 
   const load = useCallback(async () => {
     const [usersResponse, statsResponse] = await Promise.all([

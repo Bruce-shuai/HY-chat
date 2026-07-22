@@ -14,6 +14,7 @@ import { AuthBoundary } from "@/components/auth/AuthBoundary";
 import { AccountMenu } from "@/components/auth/AccountMenu";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/providers/Auth";
+import { backendUrl } from "@/lib/backend-url";
 
 type Trace = {
   id: string;
@@ -125,8 +126,7 @@ function TraceContent() {
   const [selected, setSelected] = useState<Trace | null>(null);
   const [spanType, setSpanType] = useState("");
   const [loading, setLoading] = useState(true);
-  const backend =
-    process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
+  const backend = backendUrl();
 
   const load = useCallback(async () => {
     setLoading(true);

@@ -28,6 +28,7 @@ import { Label } from "../ui/label";
 import { Switch } from "../ui/switch";
 import { useFileUpload } from "@/hooks/use-file-upload";
 import { UPLOAD_ATTACHMENT_ACCEPT } from "@/lib/multimodal-utils";
+import { backendUrl } from "@/lib/backend-url";
 import { ContentBlocksPreview } from "./ContentBlocksPreview";
 import { AccountMenu } from "@/components/auth/AccountMenu";
 import { useAuth } from "@/providers/Auth";
@@ -167,9 +168,8 @@ export function Thread() {
   }, [chatStarted]);
 
   useEffect(() => {
-    const backendUrl =
-      process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
-    authFetch(`${backendUrl}/models`)
+    const backend = backendUrl();
+    authFetch(`${backend}/models`)
       .then((response) => {
         if (!response.ok) throw new Error("模型列表加载失败");
         return response.json();
@@ -200,13 +200,12 @@ export function Thread() {
     const files = Array.from(event.target.files ?? []);
     if (!files.length) return;
     setKnowledgeUploading(true);
-    const backendUrl =
-      process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
+    const backend = backendUrl();
     try {
       for (const file of files) {
         const form = new FormData();
         form.append("file", file);
-        const response = await authFetch(`${backendUrl}/rag/documents`, {
+        const response = await authFetch(`${backend}/rag/documents`, {
           method: "POST",
           body: form,
         });

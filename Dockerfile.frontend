@@ -27,7 +27,8 @@ ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL} \
     NEXT_TELEMETRY_DISABLED=1
 COPY --from=dependencies /app/node_modules ./node_modules
 COPY frontend/ ./
-RUN pnpm build
+RUN pnpm build \
+    && grep -Rqs '"/backend"' .next/static/chunks
 
 FROM public.ecr.aws/docker/library/node:22-alpine AS runner
 
