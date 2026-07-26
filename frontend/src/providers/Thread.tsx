@@ -15,6 +15,7 @@ import {
 } from "react";
 import { createClient } from "./client";
 import { useAuth } from "./Auth";
+import { selectAgentApiUrl } from "./agent-api-policy";
 
 type ConversationSummary = {
   thread_id: string;
@@ -114,6 +115,7 @@ export function ThreadProvider({ children }: { children: ReactNode }) {
   const [authScheme] = useQueryState("authScheme", {
     defaultValue: envAuthScheme || "",
   });
+  const selectedApiUrl = selectAgentApiUrl(apiUrl, envApiUrl);
   const [threads, setThreads] = useState<Thread[]>([]);
   const [threadsLoading, setThreadsLoading] = useState(false);
   const [deletedThreadIds, setDeletedThreadIds] = useState<Set<string>>(() =>
@@ -126,16 +128,16 @@ export function ThreadProvider({ children }: { children: ReactNode }) {
 
   const getClient = useCallback(() => {
     return createClient(
-      apiUrl,
+      selectedApiUrl,
       getApiKey() ?? undefined,
       authScheme || undefined,
       accessToken,
     );
-  }, [apiUrl, authScheme, accessToken]);
+  }, [selectedApiUrl, authScheme, accessToken]);
 
   const getThreads = useCallback(async (): Promise<Thread[]> => {
     const resolvedAssistantId = assistantId || envAssistantId;
-    if (!apiUrl || !resolvedAssistantId) return [];
+    if (!selectedApiUrl || !resolvedAssistantId) return [];
     const client = getClient();
 
     const graphThreads = await client.threads.search({
@@ -168,7 +170,7 @@ export function ThreadProvider({ children }: { children: ReactNode }) {
       return visibleGraphThreads;
     }
   }, [
-    apiUrl,
+    selectedApiUrl,
     assistantId,
     envAssistantId,
     getClient,
@@ -178,7 +180,7 @@ export function ThreadProvider({ children }: { children: ReactNode }) {
 
   const renameThread = useCallback(
     async (thread: Thread, title: string): Promise<Thread> => {
-      if (!apiUrl) throw new Error("图服务地址未配置");
+      if (!selectedApiUrl) throw new Error("图服务地址未配置");
       const nextTitle = title.trim();
       if (!nextTitle) throw new Error("会话名称不能为空");
 
@@ -211,7 +213,7 @@ export function ThreadProvider({ children }: { children: ReactNode }) {
       );
       return renamed;
     },
-    [apiUrl, authFetch, getClient],
+    [selectedApiUrl, authFetch, getClient],
   );
 
   const deleteThread = useCallback(
@@ -234,14 +236,14 @@ export function ThreadProvider({ children }: { children: ReactNode }) {
         current.filter((item) => item.thread_id !== threadId),
       );
 
-      if (!apiUrl) return;
+      if (!selectedApiUrl) return;
       void getClient()
         .threads.delete(threadId)
         .catch((error) => {
           console.warn("LangGraph thread 删除失败，已隐藏本地会话记录", error);
         });
     },
-    [apiUrl, authFetch, getClient, user?.id],
+    [selectedApiUrl, authFetch, getClient, user?.id],
   );
 
   const value = {

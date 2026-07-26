@@ -22,6 +22,7 @@ import { useThreads } from "./Thread";
 import { toast } from "sonner";
 import { useAuth } from "./Auth";
 import { resolveApiUrl } from "./client";
+import { selectAgentApiUrl, userBearerHeaders } from "./agent-api-policy";
 
 export type StateType = {
   messages: BaseMessage[];
@@ -49,7 +50,10 @@ async function checkGraphStatus(
     const headers = new Headers();
     if (apiKey) headers.set("X-Api-Key", apiKey);
     if (authScheme) headers.set("X-Auth-Scheme", authScheme);
-    if (accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
+    const bearerHeaders = userBearerHeaders(apiUrl, accessToken);
+    Object.entries(bearerHeaders).forEach(([name, value]) =>
+      headers.set(name, value),
+    );
 
     const res = await fetch(`${apiUrl}/info`, {
       headers,
@@ -83,9 +87,9 @@ const StreamSession = ({
   const defaultHeaders = useMemo(
     () => ({
       ...(authScheme ? { "X-Auth-Scheme": authScheme } : {}),
-      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      ...userBearerHeaders(resolvedApiUrl, accessToken),
     }),
-    [authScheme, accessToken],
+    [authScheme, resolvedApiUrl, accessToken],
   );
   const streamValue = useTypedStream({
     apiUrl: resolvedApiUrl,
@@ -186,8 +190,8 @@ export const StreamProvider: React.FC<{ children: ReactNode }> = ({
     _setApiKey(key);
   };
 
-  // Determine final values to use, prioritizing URL params then env vars
-  const finalApiUrl = apiUrl || envApiUrl;
+  // Production ignores apiUrl query parameters and always uses same-origin /api.
+  const finalApiUrl = selectAgentApiUrl(apiUrl, envApiUrl);
   const finalAssistantId = assistantId || envAssistantId;
   const finalAuthScheme = authScheme || envAuthScheme || "";
   const streamSessionKey = buildStreamSessionKey({

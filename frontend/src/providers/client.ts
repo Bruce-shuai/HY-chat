@@ -1,9 +1,7 @@
 import { Client } from "@langchain/langgraph-sdk";
+import { resolveApiUrl, userBearerHeaders } from "./agent-api-policy";
 
-export function resolveApiUrl(apiUrl: string): string {
-  if (typeof window === "undefined") return apiUrl;
-  return new URL(apiUrl, window.location.origin).toString().replace(/\/$/, "");
-}
+export { resolveApiUrl } from "./agent-api-policy";
 
 export function createClient(
   apiUrl: string,
@@ -11,12 +9,14 @@ export function createClient(
   authScheme: string | undefined,
   accessToken?: string | null,
 ) {
+  const resolvedApiUrl = resolveApiUrl(apiUrl);
+
   return new Client({
     apiKey,
-    apiUrl: resolveApiUrl(apiUrl),
+    apiUrl: resolvedApiUrl,
     defaultHeaders: {
       ...(authScheme ? { "X-Auth-Scheme": authScheme } : {}),
-      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      ...userBearerHeaders(resolvedApiUrl, accessToken),
     },
   });
 }

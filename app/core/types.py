@@ -13,6 +13,23 @@ class UserRole(str, Enum):
     USER = "user"
 
 
+class ToolInvocationStatus(str, Enum):
+    PENDING = "pending"
+    PENDING_APPROVAL = "pending_approval"
+    APPROVED = "approved"
+    RUNNING = "running"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    REJECTED = "rejected"
+
+
+class ApprovalStatus(str, Enum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    EDITED = "edited"
+    REJECTED = "rejected"
+
+
 class ChatRole(str, Enum):
     SYSTEM = "system"
     USER = "user"

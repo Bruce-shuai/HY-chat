@@ -16,7 +16,12 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from pgvector.sqlalchemy import Vector
 
 from app.core.config import get_settings
-from app.core.types import JsonObject, UserRole
+from app.core.types import (
+    ApprovalStatus,
+    JsonObject,
+    ToolInvocationStatus,
+    UserRole,
+)
 
 from app.db.session import Base
 
@@ -222,6 +227,132 @@ class TraceSpan(Base):
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     started_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     ended_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class ToolInvocation(Base):
+    """Durable, user-scoped state for one logical chat tool invocation."""
+
+    __tablename__ = "tool_invocations"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "idempotency_key",
+            name="uq_tool_invocations_user_idempotency_key",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    user_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    conversation_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("conversations.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    thread_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    runtime_run_id: Mapped[str | None] = mapped_column(
+        String(128), nullable=True, index=True
+    )
+    tool_call_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    idempotency_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    tool_name: Mapped[str] = mapped_column(String(128), nullable=False)
+    effective_tool_name: Mapped[str] = mapped_column(String(128), nullable=False)
+    requested_input: Mapped[JsonObject] = mapped_column(JSON, default=dict)
+    effective_input: Mapped[JsonObject] = mapped_column(JSON, default=dict)
+    output: Mapped[JsonObject] = mapped_column(JSON, default=dict)
+    status: Mapped[ToolInvocationStatus] = mapped_column(
+        SqlEnum(
+            ToolInvocationStatus,
+            native_enum=False,
+            values_callable=lambda statuses: [status.value for status in statuses],
+            create_constraint=True,
+            name="tool_invocation_status",
+        ),
+        default=ToolInvocationStatus.PENDING,
+        index=True,
+    )
+    attempt_count: Mapped[int] = mapped_column(Integer, default=0)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+    )
+
+    approval: Mapped["Approval | None"] = relationship(
+        back_populates="invocation",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
+
+
+class Approval(Base):
+    """One immutable human decision for a tool invocation."""
+
+    __tablename__ = "tool_approvals"
+    __table_args__ = (
+        UniqueConstraint(
+            "invocation_id",
+            name="uq_tool_approvals_invocation_id",
+        ),
+        UniqueConstraint(
+            "user_id",
+            "idempotency_key",
+            name="uq_tool_approvals_user_idempotency_key",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    invocation_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("tool_invocations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    user_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    idempotency_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[ApprovalStatus] = mapped_column(
+        SqlEnum(
+            ApprovalStatus,
+            native_enum=False,
+            values_callable=lambda statuses: [status.value for status in statuses],
+            create_constraint=True,
+            name="approval_status",
+        ),
+        default=ApprovalStatus.PENDING,
+        index=True,
+    )
+    decision_payload: Mapped[JsonObject] = mapped_column(JSON, default=dict)
+    decided_by_user_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    requested_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+    )
+
+    invocation: Mapped[ToolInvocation] = relationship(back_populates="approval")
 
 
 class AgentRun(Base):

@@ -33,6 +33,7 @@ from langchain.agents.middleware import (
     ModelResponse,
     ToolCallRequest,
 )
+from langchain.agents.middleware import human_in_the_loop as hitl_module
 from langchain.messages import AIMessage, SystemMessage, ToolMessage
 from langchain_core.messages import BaseMessage
 from langgraph.graph import END, START, StateGraph
@@ -45,7 +46,7 @@ from sqlalchemy.orm import Session
 from app.core.admin_contact import append_admin_contact
 from app.core.config import get_settings
 from app.core.logging import configure_logging
-from app.core.types import JsonObject
+from app.core.types import JsonObject, ToolInvocationStatus
 from app.db.models import Conversation, TraceSpan
 from app.db.session import SessionLocal
 from app.models.catalog import get_chat_model, resolve_model
@@ -62,6 +63,17 @@ from app.services.memory_service import (
     message_to_text,
     remember_from_messages,
     user_memory_map,
+)
+from app.services.tool_invocation_service import (
+    ApprovalDecision,
+    ToolInvocationClaim,
+    ToolInvocationConflict,
+    ToolInvocationOwnershipError,
+    claim_tool_invocation,
+    complete_tool_invocation,
+    ensure_pending_approvals,
+    fail_tool_invocation,
+    record_approval_decisions,
 )
 from app.services.chat_response_cache import (
     acquire_response_lock,
@@ -154,7 +166,7 @@ def build_hitl_middleware() -> HumanInTheLoopMiddleware:
         tool_name: {**config, "when": _supports_hitl_resume}
         for tool_name, config in HITL_TOOL_CONFIG.items()
     }
-    return HumanInTheLoopMiddleware(
+    return PersistentHumanInTheLoopMiddleware(
         interrupt_on=interrupt_on,
         description_prefix="该工具需要人工确认",
     )
@@ -169,6 +181,164 @@ def _runtime_thread_id(runtime: object) -> str | None:
     configurable = config.get("configurable", {}) if isinstance(config, dict) else {}
     thread_id = configurable.get("thread_id")
     return str(thread_id) if thread_id else None
+
+
+def _runtime_run_id(runtime: object) -> str | None:
+    execution_info = getattr(runtime, "execution_info", None)
+    execution_run_id = getattr(execution_info, "run_id", None)
+    if execution_run_id:
+        return str(execution_run_id)
+    config = getattr(runtime, "config", {}) or {}
+    configurable = config.get("configurable", {}) if isinstance(config, dict) else {}
+    run_id = configurable.get("run_id")
+    return str(run_id) if run_id else None
+
+
+class PersistentHumanInTheLoopMiddleware(HumanInTheLoopMiddleware):
+    """Persist HITL requests before interrupt and decisions before execution."""
+
+    def after_model(
+        self,
+        state: AgentState,
+        runtime: Runtime,
+    ) -> dict[str, object] | None:
+        messages = state["messages"]
+        if not messages:
+            return None
+
+        last_ai_message = next(
+            (
+                message
+                for message in reversed(messages)
+                if isinstance(message, AIMessage)
+            ),
+            None,
+        )
+        if not last_ai_message or not last_ai_message.tool_calls:
+            return None
+
+        action_requests: list[object] = []
+        review_configs: list[object] = []
+        interrupted: list[tuple[int, dict[str, object]]] = []
+        for index, tool_call in enumerate(last_ai_message.tool_calls):
+            config = self.interrupt_on.get(tool_call["name"])
+            if config is None or not self._should_interrupt(
+                tool_call,
+                config,
+                state,
+                runtime,
+            ):
+                continue
+            action_request, review_config = self._create_action_and_config(
+                tool_call,
+                config,
+                state,
+                runtime,
+            )
+            action_requests.append(action_request)
+            review_configs.append(review_config)
+            interrupted.append((index, tool_call))
+
+        if not interrupted:
+            return None
+
+        state_user_id = state.get("auth_user_id")
+        user_id = runtime_user_id(runtime) or (
+            str(state_user_id) if state_user_id else None
+        )
+        thread_id = _runtime_thread_id(runtime)
+        runtime_run_id = _runtime_run_id(runtime)
+        if user_id:
+            db = SessionLocal()
+            try:
+                ensure_pending_approvals(
+                    db,
+                    user_id=user_id,
+                    thread_id=thread_id,
+                    runtime_run_id=runtime_run_id,
+                    tool_calls=[tool_call for _, tool_call in interrupted],
+                )
+            finally:
+                db.close()
+
+        decisions = hitl_module.interrupt(
+            {
+                "action_requests": action_requests,
+                "review_configs": review_configs,
+            }
+        )["decisions"]
+        if len(decisions) != len(interrupted):
+            raise ValueError(
+                "人工审批决定数量与待审批工具调用数量不一致："
+                f"{len(decisions)} != {len(interrupted)}"
+            )
+
+        revised_tool_calls: list[dict[str, object]] = []
+        artificial_tool_messages: list[ToolMessage] = []
+        durable_decisions: list[ApprovalDecision] = []
+        decision_index = 0
+        interrupted_indices = {index for index, _ in interrupted}
+        for index, tool_call in enumerate(last_ai_message.tool_calls):
+            if index not in interrupted_indices:
+                revised_tool_calls.append(tool_call)
+                continue
+
+            config = self.interrupt_on[tool_call["name"]]
+            decision = decisions[decision_index]
+            decision_index += 1
+            revised_tool_call, tool_message = self._process_decision(
+                decision,
+                tool_call,
+                config,
+            )
+            effective_tool_call = revised_tool_call or tool_call
+            decision_type = str(decision["type"])
+            requested_args = tool_call.get("args")
+            effective_args = effective_tool_call.get("args")
+            durable_decisions.append(
+                ApprovalDecision(
+                    tool_call_id=str(tool_call.get("id") or ""),
+                    tool_name=str(tool_call.get("name") or "unknown"),
+                    requested_input=(
+                        requested_args if isinstance(requested_args, Mapping) else {}
+                    ),
+                    decision_type=decision_type,
+                    effective_tool_name=str(
+                        effective_tool_call.get("name") or "unknown"
+                    ),
+                    effective_input=(
+                        effective_args if isinstance(effective_args, Mapping) else {}
+                    ),
+                    decision_payload=decision,
+                )
+            )
+            if revised_tool_call is not None:
+                revised_tool_calls.append(revised_tool_call)
+            if tool_message is not None:
+                artificial_tool_messages.append(tool_message)
+
+        if user_id:
+            db = SessionLocal()
+            try:
+                record_approval_decisions(
+                    db,
+                    user_id=user_id,
+                    thread_id=thread_id,
+                    runtime_run_id=runtime_run_id,
+                    decisions=durable_decisions,
+                )
+            finally:
+                db.close()
+
+        last_ai_message.tool_calls = revised_tool_calls
+        return {"messages": [last_ai_message, *artificial_tool_messages]}
+
+    async def aafter_model(
+        self,
+        state: AgentState,
+        runtime: Runtime,
+    ) -> dict[str, object] | None:
+        return self.after_model(state, runtime)
 
 
 def _message_preview(messages: Sequence[BaseMessage]) -> list[JsonObject]:
@@ -299,9 +469,7 @@ def _pdf_file_block_to_text(
     budget.decoded_bytes += len(pdf_bytes)
     if budget.decoded_bytes > byte_limit:
         limit = _upload_limit_label(byte_limit)
-        raise ValueError(
-            f"整段消息历史中的 PDF 附件解码后总大小超过 {limit}限制"
-        )
+        raise ValueError(f"整段消息历史中的 PDF 附件解码后总大小超过 {limit}限制")
 
     if budget.extracted_chars >= PDF_TEXT_MAX_CHARS:
         return {
@@ -358,8 +526,7 @@ def _pdf_file_block_to_text(
 
     if text_truncated:
         extracted += (
-            "\n\n[整段消息历史的 PDF 内容过长，"
-            f"已截取前 {PDF_TEXT_MAX_CHARS} 个字符。]"
+            f"\n\n[整段消息历史的 PDF 内容过长，已截取前 {PDF_TEXT_MAX_CHARS} 个字符。]"
         )
     elif pages_truncated:
         extracted += f"\n\n[PDF 页数过多，仅提取前 {PDF_MAX_PAGES} 页。]"
@@ -524,6 +691,44 @@ def _tool_failure_message(request: ToolCallRequest, message: str) -> ToolMessage
         tool_call_id=tool_call_id,
         name=tool_name,
     )
+
+
+def _existing_invocation_message(
+    request: ToolCallRequest,
+    claim: ToolInvocationClaim,
+) -> ToolMessage:
+    tool_name = str(request.tool_call.get("name") or claim.tool_name)
+    tool_call_id = str(request.tool_call.get("id") or claim.tool_call_id)
+    if claim.status in {
+        ToolInvocationStatus.SUCCEEDED,
+        ToolInvocationStatus.FAILED,
+    }:
+        content: object = claim.output.get("content")
+        if content is None:
+            content = {
+                "error": claim.error_message or "工具调用已结束，但没有可复用的输出"
+            }
+        if not isinstance(content, str | list):
+            content = json.dumps(content, ensure_ascii=False)
+        return ToolMessage(
+            content=content,
+            tool_call_id=tool_call_id,
+            name=tool_name,
+            status=(
+                "error" if claim.status == ToolInvocationStatus.FAILED else "success"
+            ),
+        )
+
+    state_messages = {
+        ToolInvocationStatus.PENDING_APPROVAL: "工具调用仍在等待人工审批",
+        ToolInvocationStatus.REJECTED: "工具调用已被用户拒绝",
+        ToolInvocationStatus.RUNNING: "相同工具调用已在执行中，已阻止重复执行",
+    }
+    message = state_messages.get(
+        claim.status,
+        f"工具调用当前状态为 {claim.status.value}，不能重复执行",
+    )
+    return _tool_failure_message(request, message)
 
 
 def _policy_violation_response(message: str) -> ModelResponse:
@@ -749,13 +954,17 @@ class PolicyTraceMiddleware(AgentMiddleware):
         trace: TraceSpan | None,
         exc: Exception,
         started: float,
+        claim: ToolInvocationClaim | None = None,
     ) -> None:
         latency_ms = int((time.perf_counter() - started) * 1000)
+        if claim and claim.should_execute:
+            fail_tool_invocation(db, claim=claim, error_message=str(exc))
         if trace:
             trace.status = "error"
             trace.error_message = str(exc)
             trace.latency_ms = latency_ms
             trace.ended_at = datetime.utcnow()
+        if trace or claim:
             db.commit()
         logger.warning(
             "Agent call failed span=%s model=%s tool=%s error=%s latency_ms=%s",
@@ -902,25 +1111,30 @@ class PolicyTraceMiddleware(AgentMiddleware):
             if isinstance(request.state, Mapping)
             else None
         )
-        user_id = runtime_user_id(request.runtime) or state_user_id
+        resolved_user_id = runtime_user_id(request.runtime) or state_user_id
+        user_id = str(resolved_user_id) if resolved_user_id else None
         name = str(request.tool_call.get("name") or "unknown")
         db = SessionLocal()
         try:
+            claim = None
             if user_id:
                 enforce_tool(db, user_id, name)
             trace = None
             if user_id:
                 thread_id = _runtime_thread_id(request.runtime)
-                conversation = (
-                    db.scalar(
-                        select(Conversation).where(Conversation.thread_id == thread_id)
-                    )
-                    if thread_id
-                    else None
+                args = request.tool_call.get("args")
+                claim = claim_tool_invocation(
+                    db,
+                    user_id=user_id,
+                    thread_id=thread_id,
+                    runtime_run_id=_runtime_run_id(request.runtime),
+                    tool_call_id=str(request.tool_call.get("id") or ""),
+                    tool_name=name,
+                    requested_input=args if isinstance(args, Mapping) else {},
                 )
                 trace = TraceSpan(
                     user_id=user_id,
-                    conversation_id=conversation.id if conversation else None,
+                    conversation_id=claim.conversation_id,
                     thread_id=thread_id,
                     run_id=str(request.tool_call.get("id") or uuid.uuid4()),
                     name=f"tool:{name}",
@@ -937,21 +1151,35 @@ class PolicyTraceMiddleware(AgentMiddleware):
                 _runtime_thread_id(request.runtime),
                 name,
             )
-            return db, trace
+            return db, trace, claim
         except Exception:
             db.close()
             raise
 
     @staticmethod
-    def _finish_tool_call(db, trace, result, started: float):
+    def _finish_tool_call(
+        db,
+        trace,
+        result,
+        started: float,
+        claim: ToolInvocationClaim | None = None,
+    ):
         latency_ms = int((time.perf_counter() - started) * 1000)
         error_message = _tool_error_message(result)
+        if claim and claim.should_execute:
+            complete_tool_invocation(
+                db,
+                claim=claim,
+                result=result,
+                error_message=error_message,
+            )
         if trace:
             trace.status = "error" if error_message else "success"
             trace.output = {"result": safe_json(getattr(result, "content", result))}
             trace.error_message = error_message
             trace.latency_ms = latency_ms
             trace.ended_at = datetime.utcnow()
+        if trace or claim:
             db.commit()
         logger.info(
             "Tool call completed tool=%s latency_ms=%s",
@@ -963,18 +1191,27 @@ class PolicyTraceMiddleware(AgentMiddleware):
         started = time.perf_counter()
         db = None
         trace = None
+        claim = None
         try:
-            db, trace = self._prepare_tool_call(request)
+            db, trace, claim = self._prepare_tool_call(request)
+            if claim and not claim.should_execute:
+                result = _existing_invocation_message(request, claim)
+                self._finish_tool_call(db, trace, result, started)
+                return result
             result = handler(request)
-            self._finish_tool_call(db, trace, result, started)
+            self._finish_tool_call(db, trace, result, started, claim)
             return result
-        except PolicyViolation as exc:
+        except (
+            PolicyViolation,
+            ToolInvocationConflict,
+            ToolInvocationOwnershipError,
+        ) as exc:
             if db:
-                self._fail_trace(db, trace, exc, started)
+                self._fail_trace(db, trace, exc, started, claim)
             return _tool_failure_message(request, str(exc))
         except Exception as exc:
             if db:
-                self._fail_trace(db, trace, exc, started)
+                self._fail_trace(db, trace, exc, started, claim)
             raise
         finally:
             if db:
@@ -984,18 +1221,27 @@ class PolicyTraceMiddleware(AgentMiddleware):
         started = time.perf_counter()
         db = None
         trace = None
+        claim = None
         try:
-            db, trace = self._prepare_tool_call(request)
+            db, trace, claim = self._prepare_tool_call(request)
+            if claim and not claim.should_execute:
+                result = _existing_invocation_message(request, claim)
+                self._finish_tool_call(db, trace, result, started)
+                return result
             result = await handler(request)
-            self._finish_tool_call(db, trace, result, started)
+            self._finish_tool_call(db, trace, result, started, claim)
             return result
-        except PolicyViolation as exc:
+        except (
+            PolicyViolation,
+            ToolInvocationConflict,
+            ToolInvocationOwnershipError,
+        ) as exc:
             if db:
-                self._fail_trace(db, trace, exc, started)
+                self._fail_trace(db, trace, exc, started, claim)
             return _tool_failure_message(request, str(exc))
         except Exception as exc:
             if db:
-                self._fail_trace(db, trace, exc, started)
+                self._fail_trace(db, trace, exc, started, claim)
             raise
         finally:
             if db:

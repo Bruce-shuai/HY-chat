@@ -8,6 +8,8 @@ from collections.abc import AsyncIterator, Mapping
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from langchain.messages import AIMessage, AIMessageChunk, ToolMessage
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from app.agents.chat import graph
 from app.auth.dependencies import get_current_user
@@ -19,7 +21,6 @@ from app.db.session import get_db
 from app.models.catalog import resolve_model
 from app.policies.service import authorize_model_access
 from app.schemas.chat import ChatStreamRequest
-from sqlalchemy.orm import Session
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 settings = get_settings()
@@ -69,6 +70,22 @@ async def stream_chat(
         if not conversation or conversation.user_id != user.id:
             raise HTTPException(status_code=404, detail="会话不存在")
 
+    thread_conversation = None
+    if request.thread_id:
+        thread_conversation = db.scalar(
+            select(Conversation).where(Conversation.thread_id == request.thread_id)
+        )
+        if thread_conversation and thread_conversation.user_id != user.id:
+            raise HTTPException(status_code=404, detail="会话不存在")
+
+    if (
+        conversation
+        and request.thread_id
+        and conversation.thread_id != request.thread_id
+    ):
+        raise HTTPException(status_code=409, detail="会话与线程不匹配")
+
+    conversation = conversation or thread_conversation
     messages = request.normalized_messages()
     thread_id = (
         request.thread_id
@@ -107,7 +124,7 @@ async def stream_chat(
                     "messages": messages,
                     "selected_model": model,
                     "auth_user_id": user.id,
-                    "conversation_id": request.conversation_id,
+                    "conversation_id": conversation.id if conversation else None,
                 },
                 config={"configurable": {"thread_id": thread_id}},
                 stream_mode="messages",

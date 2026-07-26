@@ -20,6 +20,10 @@ import {
   isAlreadyConsumedInterruptError,
   isTransientInterruptResumeError,
 } from "@/lib/stream-errors";
+import {
+  isAgentApiLocked,
+  selectAgentApiUrl,
+} from "@/providers/agent-api-policy";
 
 interface ThreadActionsViewProps {
   interrupt: Interrupt<HITLRequest>;
@@ -109,7 +113,12 @@ export function ThreadActionsView({
 }: ThreadActionsViewProps) {
   const stream = useStreamContext();
   const [threadId] = useQueryState("threadId");
-  const [apiUrl] = useQueryState("apiUrl");
+  const [queryApiUrl] = useQueryState("apiUrl");
+  const apiUrl = selectAgentApiUrl(
+    queryApiUrl,
+    process.env.NEXT_PUBLIC_API_URL,
+  );
+  const canOpenInStudio = !isAgentApiLocked() && Boolean(apiUrl);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [addressedActions, setAddressedActions] = useState<
     Map<number, Decision>
@@ -471,7 +480,7 @@ export function ThreadActionsView({
           )}
         </div>
         <div className="flex shrink-0 flex-row items-center justify-start gap-2">
-          {apiUrl && (
+          {canOpenInStudio && (
             <Button
               size="sm"
               variant="outline"
