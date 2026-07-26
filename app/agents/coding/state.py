@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TypedDict
 
-from app.core.types import JsonObject
+from app.core.types import JsonValue
 
 
 class CodingAgentState(TypedDict, total=False):
@@ -10,9 +10,9 @@ class CodingAgentState(TypedDict, total=False):
     task: str
     workspace: str
     model: str | None
-    project_files: JsonObject
-    search_results: JsonObject
-    selected_files: list[JsonObject]
+    project_files: dict[str, JsonValue]
+    search_results: dict[str, JsonValue]
+    selected_files: list[dict[str, JsonValue]]
     plan: str
     final_output: str
 

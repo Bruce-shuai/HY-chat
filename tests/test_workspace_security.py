@@ -10,6 +10,7 @@ from redis.exceptions import RedisError
 import app.api.routers.coding_agent as coding_agent_module
 import app.tools.builtin as builtin_tools
 import app.tools.file_tools as file_tools_module
+from app.agents.coding.workflow import build_agent_graph
 from app.auth.dependencies import get_current_user
 from app.core.types import UserRole
 from app.db.session import get_db
@@ -27,6 +28,18 @@ class FakeSession:
 
     def close(self):
         self.closed = True
+
+
+def test_coding_agent_graph_compiles_with_recursive_json_state():
+    graph = build_agent_graph(Mock())
+
+    assert {
+        "scan_project",
+        "search_code",
+        "read_selected_files",
+        "plan",
+        "final_summary",
+    } <= graph.nodes.keys()
 
 
 def test_coding_agent_status_cache_is_best_effort(monkeypatch):
