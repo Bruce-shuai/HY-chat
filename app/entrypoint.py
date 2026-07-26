@@ -13,7 +13,8 @@ def _port(default: int) -> str:
 
 
 def main() -> None:
-    validate_runtime_settings(get_settings())
+    settings = get_settings()
+    validate_runtime_settings(settings)
     service_role = os.getenv("SERVICE_ROLE", "api").strip().lower()
     if service_role == "agent":
         command = [
@@ -26,6 +27,8 @@ def main() -> None:
             "--no-browser",
             "--no-reload",
             "--allow-blocking",
+            "--n-jobs-per-worker",
+            str(settings.agent_jobs_per_worker),
         ]
     else:
         command = [

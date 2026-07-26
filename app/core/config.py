@@ -83,6 +83,18 @@ class Settings(BaseSettings):
         default="embedding-3", alias="ZHIPU_EMBEDDING_MODEL"
     )
     embedding_dimensions: int = Field(default=1024, alias="EMBEDDING_DIMENSIONS")
+    zhipu_request_timeout: float = Field(
+        default=180.0,
+        gt=0,
+        le=600,
+        alias="ZHIPU_REQUEST_TIMEOUT",
+    )
+    zhipu_max_retries: int = Field(
+        default=1,
+        ge=0,
+        le=3,
+        alias="ZHIPU_MAX_RETRIES",
+    )
 
     tavily_api_key: str = Field(default="", alias="TAVILY_API_KEY")
     alpha_vantage_api_key: str = Field(default="", alias="ALPHA_VANTAGE_API_KEY")
@@ -148,6 +160,12 @@ class Settings(BaseSettings):
     agent_run_list_limit: int = Field(
         default=DEFAULT_AGENT_RUN_LIST_LIMIT,
         alias="AGENT_RUN_LIST_LIMIT",
+    )
+    agent_jobs_per_worker: int = Field(
+        default=2,
+        ge=1,
+        le=8,
+        alias="AGENT_JOBS_PER_WORKER",
     )
 
     workspace_root: str = Field(default="/workspace", alias="WORKSPACE_ROOT")

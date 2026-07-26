@@ -133,4 +133,6 @@ def get_chat_model(model_id: str | None = None, streaming: bool = True) -> ChatO
         base_url=settings.zhipu_base_url,
         temperature=0.2,
         streaming=streaming,
+        timeout=settings.zhipu_request_timeout,
+        max_retries=settings.zhipu_max_retries,
     )

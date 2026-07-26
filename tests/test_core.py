@@ -16,6 +16,7 @@ from sqlalchemy.pool import StaticPool
 
 import app.agents.chat as chat_module
 import app.cache.service as cache_service_module
+import app.entrypoint as entrypoint_module
 from app.agents.chat import (
     HITL_TOOL_CONFIG,
     PolicyTraceMiddleware,
@@ -113,6 +114,43 @@ def test_model_catalog_and_tool_registry(monkeypatch):
         "get_weather",
         "get_stock_quote",
     }
+
+
+def test_chat_model_has_bounded_provider_requests(monkeypatch):
+    monkeypatch.setattr(catalog_module.settings, "zhipu_api_key", "test-api-key")
+    monkeypatch.setattr(catalog_module.settings, "zhipu_request_timeout", 180.0)
+    monkeypatch.setattr(catalog_module.settings, "zhipu_max_retries", 1)
+    catalog_module.get_chat_model.cache_clear()
+
+    try:
+        model = catalog_module.get_chat_model("glm-5.2")
+
+        assert model.request_timeout == 180.0
+        assert model.max_retries == 1
+    finally:
+        catalog_module.get_chat_model.cache_clear()
+
+
+def test_agent_entrypoint_configures_worker_concurrency(monkeypatch):
+    runtime_settings = SimpleNamespace(app_env="local", agent_jobs_per_worker=3)
+    exec_call = {}
+    monkeypatch.setattr(entrypoint_module, "get_settings", lambda: runtime_settings)
+    monkeypatch.setenv("SERVICE_ROLE", "agent")
+    monkeypatch.setattr(
+        entrypoint_module.os,
+        "execvp",
+        lambda executable, arguments: exec_call.update(
+            executable=executable,
+            arguments=arguments,
+        ),
+    )
+
+    entrypoint_module.main()
+
+    assert exec_call["executable"] == "langgraph"
+    arguments = exec_call["arguments"]
+    jobs_option = arguments.index("--n-jobs-per-worker")
+    assert arguments[jobs_option + 1] == "3"
 
 
 def test_hitl_tools_are_registered_and_require_review():
