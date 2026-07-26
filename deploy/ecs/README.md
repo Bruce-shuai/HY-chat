@@ -14,6 +14,9 @@ SSL and HTTP/2 enabled for both proxy hosts.
 
 The checked-in Nginx Proxy Manager snippets expect the certificate to be
 available at `/etc/letsencrypt/live/hy-ai-chat/`.
+They also set `client_max_body_size 72m` so the configured 50 MB attachment
+limit and Base64-encoded chat attachments can reach the application. Keep this
+directive when updating either proxy host.
 
 ## Alibaba Cloud checklist
 

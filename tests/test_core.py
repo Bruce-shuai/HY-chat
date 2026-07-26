@@ -1,3 +1,5 @@
+import base64
+from io import BytesIO
 import logging
 import time
 from types import SimpleNamespace
@@ -6,6 +8,7 @@ import pytest
 from langchain.agents.middleware import ModelRequest, ModelResponse
 from langchain.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langgraph.runtime import Runtime, ServerInfo
+from pypdf import PdfWriter
 from redis.exceptions import RedisError
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
@@ -471,7 +474,12 @@ def test_frontend_image_blocks_are_normalized_for_chat_models():
     ]
 
 
-def test_frontend_file_blocks_keep_filename_when_normalized():
+def test_frontend_pdf_blocks_are_converted_to_text_for_chat_models():
+    output = BytesIO()
+    writer = PdfWriter()
+    writer.add_blank_page(width=100, height=100)
+    writer.write(output)
+
     [message] = _normalize_multimodal_messages(
         [
             HumanMessage(
@@ -479,7 +487,7 @@ def test_frontend_file_blocks_keep_filename_when_normalized():
                     {
                         "type": "file",
                         "mimeType": "application/pdf",
-                        "data": "abc123",
+                        "data": base64.b64encode(output.getvalue()).decode(),
                         "metadata": {"filename": "report.pdf"},
                     }
                 ]
@@ -488,17 +496,192 @@ def test_frontend_file_blocks_keep_filename_when_normalized():
     )
 
     assert isinstance(message, HumanMessage)
-    assert message.content == [
+    assert len(message.content) == 1
+    assert message.content[0]["type"] == "text"
+    assert "report.pdf" in message.content[0]["text"]
+    assert "没有可提取的文字" in message.content[0]["text"]
+
+
+def test_invalid_pdf_base64_is_rejected_before_model_call():
+    with pytest.raises(ValueError, match="Base64 数据无效"):
+        _normalize_multimodal_messages(
+            [
+                HumanMessage(
+                    content=[
+                        {
+                            "type": "file",
+                            "mimeType": "application/pdf",
+                            "data": "not-valid-base64!",
+                            "metadata": {"filename": "broken.pdf"},
+                        }
+                    ]
+                )
+            ]
+        )
+
+
+def test_pdf_attachment_count_is_limited_across_message_history():
+    pdf_blocks = [
         {
             "type": "file",
             "mimeType": "application/pdf",
-            "data": "abc123",
-            "metadata": {"filename": "report.pdf"},
-            "source_type": "base64",
-            "mime_type": "application/pdf",
-            "filename": "report.pdf",
+            "data": base64.b64encode(b"pdf").decode(),
+            "metadata": {"filename": f"report-{index}.pdf"},
         }
+        for index in range(chat_module.PDF_MAX_ATTACHMENTS_PER_HISTORY + 1)
     ]
+    messages = [HumanMessage(content=[block]) for block in pdf_blocks]
+
+    with pytest.raises(ValueError, match="整段消息历史最多支持 3 个 PDF 附件"):
+        _normalize_multimodal_messages(messages)
+
+
+def test_pdf_decoded_bytes_are_limited_across_message_history(monkeypatch):
+    monkeypatch.setattr(chat_module.settings, "max_upload_bytes", 6)
+    pdf_blocks = [
+        {
+            "type": "file",
+            "mimeType": "application/pdf",
+            "data": base64.b64encode(b"1234").decode(),
+            "metadata": {"filename": f"report-{index}.pdf"},
+        }
+        for index in range(2)
+    ]
+    messages = [HumanMessage(content=[block]) for block in pdf_blocks]
+
+    with pytest.raises(ValueError, match="PDF 附件解码后总大小超过 6 字节限制"):
+        _normalize_multimodal_messages(messages)
+
+
+def test_pdf_history_has_eight_megabyte_decoded_limit(monkeypatch):
+    monkeypatch.setattr(chat_module.settings, "max_upload_bytes", 50 * 1024 * 1024)
+
+    assert chat_module._pdf_history_byte_limit() == 8 * 1024 * 1024
+
+
+def test_pypdf_stream_limits_are_reduced_for_chat_attachments():
+    assert all(
+        getattr(chat_module.pypdf_filters, limit_name)
+        == chat_module.PDF_STREAM_MAX_BYTES
+        == 16 * 1024 * 1024
+        for limit_name in chat_module.PYPDF_STREAM_LIMIT_NAMES
+    )
+
+
+def test_pdf_text_extraction_stops_at_page_limit(monkeypatch):
+    extracted_pages = []
+
+    class FakePage:
+        def __init__(self, page_number):
+            self.page_number = page_number
+
+        def extract_text(self):
+            extracted_pages.append(self.page_number)
+            return f"第 {self.page_number} 页内容"
+
+    class FakeReader:
+        def __init__(self, _stream):
+            self.pages = [FakePage(index) for index in range(1, 5)]
+
+    monkeypatch.setattr(chat_module, "PDF_MAX_PAGES", 2)
+    monkeypatch.setattr(chat_module, "PdfReader", FakeReader)
+    encoded = base64.b64encode(b"fake-pdf").decode()
+
+    [message] = _normalize_multimodal_messages(
+        [
+            HumanMessage(
+                content=[
+                    {
+                        "type": "file",
+                        "mimeType": "application/pdf",
+                        "data": encoded,
+                        "metadata": {"filename": "pages.pdf"},
+                    }
+                ]
+            )
+        ]
+    )
+
+    assert extracted_pages == [1, 2]
+    assert "仅提取前 2 页" in message.content[0]["text"]
+
+
+def test_pdf_text_extraction_stops_at_character_limit(monkeypatch):
+    extracted_pages = []
+
+    class FakePage:
+        def __init__(self, page_number):
+            self.page_number = page_number
+
+        def extract_text(self):
+            extracted_pages.append(self.page_number)
+            return str(self.page_number) * 60
+
+    class FakeReader:
+        def __init__(self, _stream):
+            self.pages = [FakePage(index) for index in range(1, 5)]
+
+    monkeypatch.setattr(chat_module, "PDF_TEXT_MAX_CHARS", 100)
+    monkeypatch.setattr(chat_module, "PdfReader", FakeReader)
+    encoded = base64.b64encode(b"fake-pdf").decode()
+
+    [message] = _normalize_multimodal_messages(
+        [
+            HumanMessage(
+                content=[
+                    {
+                        "type": "file",
+                        "mimeType": "application/pdf",
+                        "data": encoded,
+                        "metadata": {"filename": "long.pdf"},
+                    }
+                ]
+            )
+        ]
+    )
+
+    extracted = message.content[0]["text"]
+    assert extracted_pages == [1, 2]
+    assert "已截取前 100 个字符" in extracted
+    assert "整段消息历史" in extracted
+
+
+def test_pdf_character_budget_is_shared_across_message_history(monkeypatch):
+    reader_calls = []
+    extracted_pages = []
+
+    class FakePage:
+        def extract_text(self):
+            extracted_pages.append(len(extracted_pages) + 1)
+            return "文" * 50
+
+    class FakeReader:
+        def __init__(self, _stream):
+            reader_calls.append(len(reader_calls) + 1)
+            self.pages = [FakePage()]
+
+    monkeypatch.setattr(chat_module, "PDF_TEXT_MAX_CHARS", 70)
+    monkeypatch.setattr(chat_module, "PdfReader", FakeReader)
+    messages = [
+        HumanMessage(
+            content=[
+                {
+                    "type": "file",
+                    "mimeType": "application/pdf",
+                    "data": base64.b64encode(f"fake-pdf-{index}".encode()).decode(),
+                    "metadata": {"filename": f"history-{index}.pdf"},
+                }
+            ]
+        )
+        for index in range(3)
+    ]
+
+    normalized = _normalize_multimodal_messages(messages)
+
+    assert reader_calls == [1, 2]
+    assert extracted_pages == [1, 2]
+    assert "已截取前 70 个字符" in normalized[1].content[0]["text"]
+    assert "未继续解析此附件" in normalized[2].content[0]["text"]
 
 
 def test_mock_graph_persists_direct_fastapi_trace_and_conversation(monkeypatch):
@@ -675,6 +858,56 @@ def test_model_request_backfills_memory_from_existing_traces():
             assert memory.memory_value == "何阳"
             assert "用户姓名：何阳" in updated.system_message.content
     finally:
+        Base.metadata.drop_all(engine)
+        engine.dispose()
+
+
+def test_model_call_extracts_memory_before_normalizing_pdf_text(monkeypatch):
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(engine)
+    testing_session = sessionmaker(bind=engine, expire_on_commit=False)
+    monkeypatch.setattr(chat_module, "SessionLocal", testing_session)
+    monkeypatch.setattr(chat_module, "authorize_model_access", lambda *_args: None)
+    monkeypatch.setattr(
+        chat_module,
+        "_normalize_multimodal_messages",
+        lambda _messages: [HumanMessage(content="我叫 PDF文档名")],
+    )
+    request = ModelRequest(
+        model=SimpleNamespace(),
+        messages=[
+            HumanMessage(
+                content=[
+                    {
+                        "type": "file",
+                        "mimeType": "application/pdf",
+                        "data": base64.b64encode(b"fake-pdf").decode(),
+                    }
+                ]
+            )
+        ],
+        system_message=SystemMessage(content="系统提示"),
+        state={"auth_user_id": "user-1", "selected_model": resolve_model(None)},
+        runtime=SimpleNamespace(config={}),
+    )
+
+    db = None
+    try:
+        prepared, db, *_rest = PolicyTraceMiddleware()._prepare_model_call(request)
+        memory = db.scalar(select(UserMemory))
+        trace = db.scalar(select(TraceSpan))
+
+        assert prepared.messages[0].content == "我叫 PDF文档名"
+        assert memory is None
+        assert trace is not None
+        assert "PDF文档名" not in str(trace.input)
+    finally:
+        if db is not None:
+            db.close()
         Base.metadata.drop_all(engine)
         engine.dispose()
 

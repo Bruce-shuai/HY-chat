@@ -1,7 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import {
+  ChangeEvent,
+  FormEvent,
+  InputHTMLAttributes,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   AlertCircle,
   ArrowLeft,
@@ -9,16 +18,21 @@ import {
   CheckCircle2,
   Clock3,
   Code2,
+  FileSearch,
+  FolderOpen,
+  Info,
   LoaderCircle,
+  ShieldCheck,
   RefreshCcw,
   TerminalSquare,
+  Trash2,
+  Upload,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { AuthBoundary } from "@/components/auth/AuthBoundary";
 import { AccountMenu } from "@/components/auth/AccountMenu";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Toaster } from "@/components/ui/sonner";
 import { useAuth } from "@/providers/Auth";
@@ -63,6 +77,20 @@ type ModelOption = {
   is_default: boolean;
 };
 
+type WorkspaceOption = {
+  workspace_id: string;
+  path: string;
+  name: string;
+  file_count: number;
+  file_count_truncated: boolean;
+  source: "root" | "mounted" | "imported";
+};
+
+type WorkspaceListResponse = {
+  root: string;
+  workspaces: WorkspaceOption[];
+};
+
 const STATUS_LABELS: Record<string, string> = {
   failed: "失败",
   mock: "模拟",
@@ -75,6 +103,80 @@ const TOOL_LABELS: Record<string, string> = {
   read_file: "读取文件",
   search_code: "搜索代码",
 };
+
+const DIRECTORY_INPUT_PROPS = {
+  webkitdirectory: "",
+  directory: "",
+} as InputHTMLAttributes<HTMLInputElement>;
+
+const IMPORTED_SOURCE_EXTENSIONS = new Set([
+  "css",
+  "dockerfile",
+  "env.example",
+  "example",
+  "html",
+  "ini",
+  "js",
+  "jsx",
+  "json",
+  "md",
+  "py",
+  "sh",
+  "sql",
+  "toml",
+  "ts",
+  "tsx",
+  "txt",
+  "yaml",
+  "yml",
+]);
+const IMPORT_IGNORED_DIRECTORIES = new Set([
+  ".git",
+  ".next",
+  ".pytest_cache",
+  ".ruff_cache",
+  ".turbo",
+  ".venv",
+  "__pycache__",
+  "build",
+  "dist",
+  "node_modules",
+  "venv",
+]);
+
+function isImportableSourceFile(file: File) {
+  const relativePath =
+    (file as File & { webkitRelativePath?: string }).webkitRelativePath ||
+    file.name;
+  const parts = relativePath.split("/");
+  if (parts.some((part) => IMPORT_IGNORED_DIRECTORIES.has(part))) return false;
+  const name = parts.at(-1) || "";
+  if (
+    name === ".env" ||
+    (name.startsWith(".env.") && name !== ".env.example")
+  ) {
+    return false;
+  }
+  if (["Dockerfile", "Makefile"].includes(name)) return true;
+  const lowerName = name.toLowerCase();
+  return Array.from(IMPORTED_SOURCE_EXTENSIONS).some((extension) =>
+    lowerName.endsWith(`.${extension}`),
+  );
+}
+
+function workspaceFileCountLabel(workspace: WorkspaceOption) {
+  return workspace.file_count_truncated
+    ? `${workspace.file_count}+ 个文件，扫描前 ${workspace.file_count} 个`
+    : `${workspace.file_count} 个文件`;
+}
+
+function preferredWorkspacePath(payload: WorkspaceListResponse) {
+  return (
+    payload.workspaces.find((item) => item.source === "mounted")?.path ||
+    payload.workspaces.find((item) => item.source === "imported")?.path ||
+    payload.root
+  );
+}
 
 function formatDate(value: string) {
   const date = new Date(value);
@@ -353,14 +455,22 @@ function CodingAgentContent() {
   const [runs, setRuns] = useState<AgentRunSummary[]>([]);
   const [selectedRun, setSelectedRun] = useState<AgentRunDetail | null>(null);
   const [models, setModels] = useState<ModelOption[]>([]);
+  const [workspaces, setWorkspaces] = useState<WorkspaceOption[]>([]);
   const [selectedModel, setSelectedModel] = useState("");
   const [task, setTask] = useState("");
   const [workspace, setWorkspace] = useState("");
   const [loadingRuns, setLoadingRuns] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [importingWorkspace, setImportingWorkspace] = useState(false);
+  const [deletingWorkspace, setDeletingWorkspace] = useState(false);
+  const directoryInputRef = useRef<HTMLInputElement>(null);
   const backend = backendUrl();
 
   const stats = useMemo(() => getRunStats(runs), [runs]);
+  const selectedWorkspace = useMemo(
+    () => workspaces.find((item) => item.path === workspace),
+    [workspace, workspaces],
+  );
 
   const loadRuns = useCallback(async () => {
     setLoadingRuns(true);
@@ -393,11 +503,114 @@ function CodingAgentContent() {
     }
   }, [authFetch, backend]);
 
+  const loadWorkspaces = useCallback(async () => {
+    try {
+      const response = await authFetch(`${backend}/coding-agent/workspaces`);
+      if (!response.ok) {
+        const result = await response.json().catch(() => null);
+        throw new Error(result?.detail || "工作区加载失败");
+      }
+      const payload = (await response.json()) as WorkspaceListResponse;
+      setWorkspaces(payload.workspaces);
+      setWorkspace((current) => {
+        const stillExists = payload.workspaces.some(
+          (item) => item.path === current,
+        );
+        return stillExists ? current : preferredWorkspacePath(payload);
+      });
+    } catch (error) {
+      toast.error("工作区加载失败", {
+        description: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }, [authFetch, backend]);
+
   useEffect(() => {
     if (user?.role !== "admin") return;
     loadRuns();
     loadModels();
-  }, [loadModels, loadRuns, user?.role]);
+    loadWorkspaces();
+  }, [loadModels, loadRuns, loadWorkspaces, user?.role]);
+
+  const importLocalFolder = async (event: ChangeEvent<HTMLInputElement>) => {
+    const selectedFiles = Array.from(event.target.files ?? []);
+    event.target.value = "";
+    if (selectedFiles.length === 0) return;
+    const files = selectedFiles.filter(isImportableSourceFile);
+    if (files.length === 0) {
+      toast.error("没有找到可分析的代码文件");
+      return;
+    }
+    if (files.length > 300) {
+      toast.error("代码文件过多", {
+        description: "请精简到 300 个文件以内再导入。",
+      });
+      return;
+    }
+
+    setImportingWorkspace(true);
+    try {
+      const body = new FormData();
+      files.forEach((file) => {
+        const relativePath =
+          (file as File & { webkitRelativePath?: string }).webkitRelativePath ||
+          file.name;
+        body.append("files", file, relativePath);
+      });
+      const response = await authFetch(
+        `${backend}/coding-agent/workspaces/import`,
+        { method: "POST", body },
+      );
+      const result = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(result?.detail || "文件夹导入失败");
+      }
+      const imported = result as WorkspaceOption;
+      setWorkspaces((current) => [
+        imported,
+        ...current.filter((item) => item.path !== imported.path),
+      ]);
+      setWorkspace(imported.path);
+      toast.success("文件夹已导入", {
+        description: `已选择 ${imported.name}，${workspaceFileCountLabel(imported)}。`,
+      });
+    } catch (error) {
+      toast.error("文件夹导入失败", {
+        description: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      setImportingWorkspace(false);
+    }
+  };
+
+  const deleteImportedWorkspace = async () => {
+    if (selectedWorkspace?.source !== "imported") return;
+    const confirmed = window.confirm(
+      `确定删除“${selectedWorkspace.name}”的服务端分析副本吗？电脑上的原文件不会受到影响。`,
+    );
+    if (!confirmed) return;
+
+    setDeletingWorkspace(true);
+    try {
+      const response = await authFetch(
+        `${backend}/coding-agent/workspaces/import/${encodeURIComponent(selectedWorkspace.workspace_id)}`,
+        { method: "DELETE" },
+      );
+      if (!response.ok) {
+        const result = await response.json().catch(() => null);
+        throw new Error(result?.detail || "项目副本删除失败");
+      }
+      toast.success("项目副本已删除");
+      setWorkspace("");
+      await loadWorkspaces();
+    } catch (error) {
+      toast.error("项目副本删除失败", {
+        description: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      setDeletingWorkspace(false);
+    }
+  };
 
   const openRun = async (run: AgentRunSummary) => {
     try {
@@ -491,6 +704,50 @@ function CodingAgentContent() {
       </header>
 
       <div className="mx-auto max-w-7xl p-3 sm:p-6">
+        <section className="bg-background mb-4 rounded-lg border p-4 sm:mb-5 sm:p-5">
+          <div className="flex items-start gap-3">
+            <div className="bg-muted mt-0.5 rounded-lg p-2">
+              <Info className="size-5" />
+            </div>
+            <div className="min-w-0">
+              <h2 className="font-semibold">用自然语言快速了解一个代码项目</h2>
+              <p className="text-muted-foreground mt-1 text-sm leading-6">
+                Coding Agent
+                会扫描文件、搜索相关代码并读取关键片段，最后给出项目判断、执行建议和风险点。
+              </p>
+              <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                <div className="flex gap-2 rounded-lg border p-3">
+                  <FolderOpen className="mt-0.5 size-4 shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium">1. 选择项目</p>
+                    <p className="text-muted-foreground mt-1 text-xs leading-5">
+                      选择已挂载项目，或导入电脑上的文件夹副本。
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-2 rounded-lg border p-3">
+                  <FileSearch className="mt-0.5 size-4 shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium">2. 描述问题</p>
+                    <p className="text-muted-foreground mt-1 text-xs leading-5">
+                      例如“梳理登录流程”或“检查权限绕过风险”。
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-2 rounded-lg border p-3">
+                  <ShieldCheck className="mt-0.5 size-4 shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium">3. 获取只读分析</p>
+                    <p className="text-muted-foreground mt-1 text-xs leading-5">
+                      不修改源码，也不会执行命令、测试或 Git 操作。
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
           <form
             onSubmit={submitRun}
@@ -502,7 +759,7 @@ function CodingAgentContent() {
             </div>
             <div className="grid gap-4">
               <label className="text-muted-foreground text-xs">
-                任务
+                想让 Agent 分析什么？
                 <Textarea
                   value={task}
                   onChange={(event) => setTask(event.target.value)}
@@ -511,16 +768,34 @@ function CodingAgentContent() {
                   disabled={submitting}
                 />
               </label>
-              <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_240px]">
+              <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_220px]">
                 <label className="text-muted-foreground text-xs">
-                  工作区
-                  <Input
+                  要分析的项目
+                  <select
                     value={workspace}
                     onChange={(event) => setWorkspace(event.target.value)}
-                    placeholder="/workspace"
-                    className="mt-1"
-                    disabled={submitting}
-                  />
+                    className="bg-background mt-1 h-9 w-full rounded-md border px-2 text-sm"
+                    disabled={submitting || importingWorkspace}
+                  >
+                    {workspaces.length === 0 ? (
+                      <option value="">默认工作区</option>
+                    ) : (
+                      workspaces.map((item) => (
+                        <option
+                          key={item.path}
+                          value={item.path}
+                        >
+                          {item.source === "root"
+                            ? "全部工作区（可能包含多个项目）"
+                            : item.name}
+                          {`（${workspaceFileCountLabel(item)}）`}
+                        </option>
+                      ))
+                    )}
+                  </select>
+                  <span className="mt-1 block leading-5">
+                    默认选择单个项目；“全部工作区”可能混合多个项目的结果。
+                  </span>
                 </label>
                 <label className="text-muted-foreground text-xs">
                   模型
@@ -546,6 +821,57 @@ function CodingAgentContent() {
                   </select>
                 </label>
               </div>
+              <div className="bg-muted/40 flex flex-col gap-3 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">项目不在列表里？</p>
+                  <p className="text-muted-foreground mt-1 text-xs leading-5">
+                    从电脑选择文件夹后，会上传一份代码副本用于分析；原文件不会被修改。最多
+                    300 个代码文件、20 MB，副本会保留到你主动删除。
+                  </p>
+                </div>
+                <input
+                  ref={directoryInputRef}
+                  type="file"
+                  multiple
+                  className="hidden"
+                  onChange={importLocalFolder}
+                  {...DIRECTORY_INPUT_PROPS}
+                />
+                <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
+                  {selectedWorkspace?.source === "imported" && (
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      onClick={deleteImportedWorkspace}
+                      disabled={
+                        submitting || importingWorkspace || deletingWorkspace
+                      }
+                    >
+                      {deletingWorkspace ? (
+                        <LoaderCircle className="size-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="size-4" />
+                      )}
+                      {deletingWorkspace ? "正在删除..." : "删除当前副本"}
+                    </Button>
+                  )}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => directoryInputRef.current?.click()}
+                    disabled={
+                      submitting || importingWorkspace || deletingWorkspace
+                    }
+                  >
+                    {importingWorkspace ? (
+                      <LoaderCircle className="size-4 animate-spin" />
+                    ) : (
+                      <Upload className="size-4" />
+                    )}
+                    {importingWorkspace ? "正在导入..." : "导入本机文件夹"}
+                  </Button>
+                </div>
+              </div>
               <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
                 <Button
                   type="button"
@@ -561,7 +887,13 @@ function CodingAgentContent() {
                 </Button>
                 <Button
                   type="submit"
-                  disabled={!task.trim() || submitting}
+                  disabled={
+                    !task.trim() ||
+                    !workspace ||
+                    submitting ||
+                    importingWorkspace ||
+                    deletingWorkspace
+                  }
                   className="w-full sm:w-auto"
                 >
                   {submitting ? (

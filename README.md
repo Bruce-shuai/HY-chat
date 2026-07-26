@@ -214,9 +214,18 @@ RAG 原始文件和用户上传附件也会进入同一存储层。
 
 Coding Agent 路由已从含义不清的 `/agent/*` 调整为：
 
+- `GET /coding-agent/workspaces`：列出服务端可访问的工作区
+- `POST /coding-agent/workspaces/import`：导入本机文件夹的代码副本
+- `DELETE /coding-agent/workspaces/import/{workspace_id}`：删除导入的项目副本
 - `POST /coding-agent/runs`
 - `GET /coding-agent/runs`
 - `GET /coding-agent/runs/{id}`
+
+管理页面不再要求手动填写容器路径。可以从已挂载的工作区中直接选择项目，
+也可以通过浏览器文件夹选择器导入本机项目副本。导入只保留支持的文本代码文件，
+会忽略依赖、构建目录和 `.env` 等本地配置；单次最多 300 个代码文件、20 MB。
+服务端最多保留 20 个导入项目、合计 200 MB，达到上限后需要先在页面删除旧副本。
+Coding Agent 当前只执行扫描、搜索、读取和分析，不会修改源码、执行命令或操作 Git。
 
 ## 模型、工具、SSE 与 Cache
 

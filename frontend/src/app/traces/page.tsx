@@ -29,6 +29,7 @@ type Trace = {
   input?: unknown;
   output?: unknown;
   error_message?: string;
+  error?: unknown;
 };
 
 const TRACE_LABELS: Record<string, string> = {
@@ -273,12 +274,18 @@ function TraceContent() {
                 <X className="size-5" />
               </button>
             </div>
-            {selected.error_message && (
+            {selected.error_message && !selected.error && (
               <div className="mb-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">
                 {selected.error_message}
               </div>
             )}
             <div className="space-y-5">
+              {selected.error != null && (
+                <JsonBlock
+                  title="错误"
+                  value={selected.error}
+                />
+              )}
               <JsonBlock
                 title="输入"
                 value={selected.input}

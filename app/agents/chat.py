@@ -12,12 +12,16 @@ Request flow:
 from __future__ import annotations
 
 import asyncio
+import base64
+import binascii
 import json
 import logging
 import time
 import uuid
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from datetime import date, datetime
+from io import BytesIO
 from typing import NotRequired
 
 from langchain.agents import AgentState, create_agent
@@ -33,6 +37,8 @@ from langchain.messages import AIMessage, SystemMessage, ToolMessage
 from langchain_core.messages import BaseMessage
 from langgraph.graph import END, START, StateGraph
 from langgraph.runtime import Runtime
+from pypdf import filters as pypdf_filters
+from pypdf import PdfReader
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -72,6 +78,31 @@ from app.tracing.service import safe_json
 settings = get_settings()
 configure_logging(settings.log_level)
 logger = logging.getLogger(__name__)
+
+PDF_TEXT_MAX_CHARS = 120_000
+PDF_MAX_PAGES = 100
+PDF_MAX_ATTACHMENTS_PER_HISTORY = 3
+PDF_TOTAL_MAX_DECODED_BYTES = 8 * 1024 * 1024
+PDF_STREAM_MAX_BYTES = 16 * 1024 * 1024
+PYPDF_STREAM_LIMIT_NAMES = (
+    "MAX_DECLARED_STREAM_LENGTH",
+    "MAX_ARRAY_BASED_STREAM_OUTPUT_LENGTH",
+    "JBIG2_MAX_OUTPUT_LENGTH",
+    "LZW_MAX_OUTPUT_LENGTH",
+    "RUN_LENGTH_MAX_OUTPUT_LENGTH",
+    "ZLIB_MAX_OUTPUT_LENGTH",
+    "FLATE_MAX_BUFFER_SIZE",
+)
+
+for _pypdf_limit_name in PYPDF_STREAM_LIMIT_NAMES:
+    if hasattr(pypdf_filters, _pypdf_limit_name):
+        setattr(pypdf_filters, _pypdf_limit_name, PDF_STREAM_MAX_BYTES)
+
+
+@dataclass
+class _PdfNormalizationBudget:
+    decoded_bytes: int = 0
+    extracted_chars: int = 0
 
 
 class ChatState(AgentState):
@@ -150,7 +181,9 @@ def _message_preview(messages: Sequence[BaseMessage]) -> list[JsonObject]:
     ]
 
 
-def _normalize_frontend_multimodal_block(block: Mapping[str, object]) -> dict[str, object]:
+def _normalize_frontend_multimodal_block(
+    block: Mapping[str, object],
+) -> dict[str, object]:
     normalized = dict(block)
     block_type = normalized.get("type")
     mime_type = normalized.get("mime_type") or normalized.get("mimeType")
@@ -178,12 +211,203 @@ def _normalize_frontend_multimodal_block(block: Mapping[str, object]) -> dict[st
     return normalized
 
 
-def _normalize_multimodal_content(content: object) -> object:
+def _attachment_filename(block: Mapping[str, object]) -> str:
+    candidate = block.get("filename")
+    metadata = block.get("metadata")
+    if not candidate and isinstance(metadata, Mapping):
+        candidate = metadata.get("filename") or metadata.get("name")
+    if isinstance(candidate, str) and candidate.strip():
+        return candidate.strip()
+    return "document.pdf"
+
+
+def _is_pdf_file_block(block: Mapping[str, object]) -> bool:
+    block_type = block.get("type")
+    mime_type = block.get("mime_type") or block.get("mimeType")
+    return block_type == "file" and mime_type == "application/pdf"
+
+
+def _base64_decoded_size(data: str) -> int:
+    """Return the decoded size for valid Base64, or a safe upper bound otherwise."""
+
+    groups, remainder = divmod(len(data), 4)
+    if remainder:
+        return (groups + 1) * 3
+    padding = min(len(data) - len(data.rstrip("=")), 2)
+    return groups * 3 - padding
+
+
+def _upload_limit_label(limit_bytes: int) -> str:
+    if limit_bytes < 1024:
+        return f"{limit_bytes} 字节"
+    limit_mb = limit_bytes / (1024 * 1024)
+    return f"{limit_mb:g} 兆字节"
+
+
+def _pdf_history_byte_limit() -> int:
+    return min(settings.max_upload_bytes, PDF_TOTAL_MAX_DECODED_BYTES)
+
+
+def _validate_pdf_history_blocks(blocks: Sequence[Mapping[str, object]]) -> None:
+    pdf_blocks = [block for block in blocks if _is_pdf_file_block(block)]
+    if len(pdf_blocks) > PDF_MAX_ATTACHMENTS_PER_HISTORY:
+        raise ValueError(
+            "整段消息历史最多支持 "
+            f"{PDF_MAX_ATTACHMENTS_PER_HISTORY} 个 PDF 附件，"
+            f"当前包含 {len(pdf_blocks)} 个"
+        )
+
+    byte_limit = _pdf_history_byte_limit()
+    estimated_total = 0
+    for block in pdf_blocks:
+        data = block.get("data") or block.get("base64")
+        if not isinstance(data, str):
+            continue
+        estimated_size = _base64_decoded_size(data)
+        if estimated_size > byte_limit:
+            filename = _attachment_filename(block)
+            limit = _upload_limit_label(byte_limit)
+            raise ValueError(f"PDF 附件 {filename} 超过 {limit}限制")
+        estimated_total += estimated_size
+
+    if estimated_total > byte_limit:
+        limit = _upload_limit_label(byte_limit)
+        raise ValueError(f"整段消息历史中的 PDF 附件解码后总大小超过 {limit}限制")
+
+
+def _pdf_file_block_to_text(
+    block: Mapping[str, object],
+    *,
+    budget: _PdfNormalizationBudget | None = None,
+) -> dict[str, str] | None:
+    data = block.get("data") or block.get("base64")
+    if not _is_pdf_file_block(block) or not isinstance(data, str):
+        return None
+
+    if budget is None:
+        budget = _PdfNormalizationBudget()
+    filename = _attachment_filename(block)
+    try:
+        pdf_bytes = base64.b64decode(data, validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise ValueError(f"PDF 附件 {filename} 的 Base64 数据无效") from exc
+
+    byte_limit = _pdf_history_byte_limit()
+    if len(pdf_bytes) > byte_limit:
+        limit = _upload_limit_label(byte_limit)
+        raise ValueError(f"PDF 附件 {filename} 超过 {limit}限制")
+    budget.decoded_bytes += len(pdf_bytes)
+    if budget.decoded_bytes > byte_limit:
+        limit = _upload_limit_label(byte_limit)
+        raise ValueError(
+            f"整段消息历史中的 PDF 附件解码后总大小超过 {limit}限制"
+        )
+
+    if budget.extracted_chars >= PDF_TEXT_MAX_CHARS:
+        return {
+            "type": "text",
+            "text": (
+                f"已上传 PDF 文件：{filename}\n\n"
+                "整段消息历史的 PDF 文本提取总量已达到 "
+                f"{PDF_TEXT_MAX_CHARS} 个字符限制，未继续解析此附件。"
+            ),
+        }
+
+    try:
+        reader = PdfReader(BytesIO(pdf_bytes))
+        extracted_prefix = (
+            f"已上传 PDF 文件：{filename}\n\n以下是从 PDF 中提取的文本：\n\n"
+        )
+        page_texts: list[str] = []
+        text_truncated = False
+        pages_truncated = False
+        for page_number, page in enumerate(reader.pages, start=1):
+            if page_number > PDF_MAX_PAGES:
+                pages_truncated = True
+                break
+            text = (page.extract_text() or "").strip()
+            if not text:
+                continue
+
+            section = f"[第 {page_number} 页]\n{text}"
+            separator_size = 2 if page_texts else 0
+            remaining_chars = (
+                PDF_TEXT_MAX_CHARS - budget.extracted_chars - separator_size
+            )
+            if remaining_chars <= 0:
+                text_truncated = True
+                break
+            if len(section) > remaining_chars:
+                page_texts.append(section[:remaining_chars])
+                budget.extracted_chars = PDF_TEXT_MAX_CHARS
+                text_truncated = True
+                break
+
+            page_texts.append(section)
+            budget.extracted_chars += separator_size + len(section)
+    except Exception as exc:
+        raise ValueError(f"PDF 附件 {filename} 无法解析：{exc}") from exc
+
+    if not page_texts:
+        extracted = (
+            f"已上传 PDF 文件：{filename}\n\n"
+            "该 PDF 没有可提取的文字，可能是扫描件或纯图片文档。"
+        )
+    else:
+        extracted = extracted_prefix + "\n\n".join(page_texts)
+
+    if text_truncated:
+        extracted += (
+            "\n\n[整段消息历史的 PDF 内容过长，"
+            f"已截取前 {PDF_TEXT_MAX_CHARS} 个字符。]"
+        )
+    elif pages_truncated:
+        extracted += f"\n\n[PDF 页数过多，仅提取前 {PDF_MAX_PAGES} 页。]"
+    return {"type": "text", "text": extracted}
+
+
+def _normalize_content_block(
+    block: Mapping[str, object],
+    *,
+    budget: _PdfNormalizationBudget | None = None,
+) -> dict[str, object]:
+    pdf_text_block = _pdf_file_block_to_text(
+        block,
+        budget=budget,
+    )
+    if pdf_text_block is not None:
+        return pdf_text_block
+    return _normalize_frontend_multimodal_block(block)
+
+
+def _multimodal_content_blocks(content: object) -> list[Mapping[str, object]]:
     if isinstance(content, Mapping):
-        return _normalize_frontend_multimodal_block(content)
-    if isinstance(content, Sequence) and not isinstance(content, str | bytes | bytearray):
+        return [content]
+    if isinstance(content, Sequence) and not isinstance(
+        content, str | bytes | bytearray
+    ):
+        return [block for block in content if isinstance(block, Mapping)]
+    return []
+
+
+def _normalize_multimodal_content(
+    content: object,
+    *,
+    budget: _PdfNormalizationBudget | None = None,
+) -> object:
+    if budget is None:
+        budget = _PdfNormalizationBudget()
+        _validate_pdf_history_blocks(_multimodal_content_blocks(content))
+    if isinstance(content, Mapping):
+        return _normalize_content_block(content, budget=budget)
+    if isinstance(content, Sequence) and not isinstance(
+        content, str | bytes | bytearray
+    ):
         return [
-            _normalize_frontend_multimodal_block(block)
+            _normalize_content_block(
+                block,
+                budget=budget,
+            )
             if isinstance(block, Mapping)
             else block
             for block in content
@@ -194,12 +418,25 @@ def _normalize_multimodal_content(content: object) -> object:
 def _normalize_multimodal_messages(
     messages: Sequence[BaseMessage | Mapping[str, object]],
 ) -> list[BaseMessage | dict[str, object]]:
+    message_list = list(messages)
+    pdf_blocks: list[Mapping[str, object]] = []
+    for message in message_list:
+        content = (
+            message.get("content", "")
+            if isinstance(message, Mapping)
+            else getattr(message, "content", "")
+        )
+        pdf_blocks.extend(_multimodal_content_blocks(content))
+    _validate_pdf_history_blocks(pdf_blocks)
+
+    budget = _PdfNormalizationBudget()
     normalized_messages: list[BaseMessage | dict[str, object]] = []
-    for message in messages:
+    for message in message_list:
         if isinstance(message, Mapping):
             normalized = dict(message)
             normalized["content"] = _normalize_multimodal_content(
-                normalized.get("content", "")
+                normalized.get("content", ""),
+                budget=budget,
             )
             normalized_messages.append(normalized)
         else:
@@ -207,7 +444,8 @@ def _normalize_multimodal_messages(
                 message.model_copy(
                     update={
                         "content": _normalize_multimodal_content(
-                            getattr(message, "content", "")
+                            getattr(message, "content", ""),
+                            budget=budget,
                         )
                     }
                 )
@@ -423,9 +661,7 @@ class PolicyTraceMiddleware(AgentMiddleware):
         user_id = runtime_user_id(request.runtime) or request.state.get("auth_user_id")
         db = SessionLocal()
         try:
-            request = request.override(
-                messages=_normalize_multimodal_messages(request.messages)
-            )
+            original_messages = request.messages
             thread_id = _runtime_thread_id(request.runtime)
             conversation = None
             if user_id:
@@ -438,6 +674,9 @@ class PolicyTraceMiddleware(AgentMiddleware):
                     selected,
                 )
                 request = _append_memory_to_request(request, db, user_id, thread_id)
+            request = request.override(
+                messages=_normalize_multimodal_messages(request.messages)
+            )
             cache_key = build_request_cache_key(request, user_id, selected)
             trace = None
             if user_id:
@@ -453,7 +692,7 @@ class PolicyTraceMiddleware(AgentMiddleware):
                     name=f"model:{selected}",
                     span_type="model",
                     model_name=selected,
-                    input={"messages": _message_preview(request.messages)},
+                    input={"messages": _message_preview(original_messages)},
                 )
                 db.add(trace)
                 db.commit()

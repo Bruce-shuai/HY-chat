@@ -15,7 +15,7 @@ from app.core.types import UserRole
 from app.db.models import UserPolicy
 from app.db.session import Base
 from app.policies.service import authorize_model_access, record_token_usage
-from app.tracing.service import REDACTED_VALUE, safe_json
+from app.tracing.service import REDACTED_VALUE, parse_trace_error, safe_json
 
 
 def test_production_settings_reject_unsafe_defaults():
@@ -108,6 +108,26 @@ def test_trace_payload_summarizes_large_binary_fields():
     assert payload["data"]["reason"] == "large-binary-field"
     assert payload["data"]["chars"] == 600
     assert payload["data"]["sha256"]
+
+
+def test_provider_error_is_normalized_to_json():
+    error = parse_trace_error(
+        "Error code: 400 - {'error': {'code': '1214', "
+        "'message': 'messages[1].content[1].type类型错误'}}"
+    )
+
+    assert error == {
+        "http_status": 400,
+        "error": {
+            "code": "1214",
+            "message": "messages[1].content[1].type类型错误",
+        },
+    }
+
+    spoofed_status = parse_trace_error(
+        "Error code: 503 - {'http_status': 200, 'message': 'unavailable'}"
+    )
+    assert spoofed_status == {"http_status": 503, "message": "unavailable"}
 
 
 def test_model_authorization_does_not_consume_rpm_and_token_updates_are_atomic(

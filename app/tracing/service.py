@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import ast
 from collections.abc import Mapping, Sequence
 import hashlib
+import json
+import re
 from pydantic import BaseModel
 
 from app.core.constants import DEFAULT_TRACE_PAYLOAD_MAX_CHARS
@@ -24,6 +27,10 @@ SENSITIVE_FIELD_NAMES = {
     "token",
     "access_token",
 }
+HTTP_ERROR_PATTERN = re.compile(
+    r"^Error code:\s*(?P<status>\d+)\s*-\s*(?P<payload>.+)$",
+    re.DOTALL,
+)
 
 
 def _is_sensitive_field(key: object) -> bool:
@@ -70,6 +77,31 @@ def safe_json(
     return safe_json(str(value), max_length)
 
 
+def parse_trace_error(error_message: str | None) -> JsonValue:
+    if not error_message:
+        return None
+
+    raw = error_message.strip()
+    match = HTTP_ERROR_PATTERN.match(raw)
+    status = int(match.group("status")) if match else None
+    payload = match.group("payload").strip() if match else raw
+
+    parsed: object = payload
+    try:
+        parsed = json.loads(payload)
+    except (json.JSONDecodeError, TypeError):
+        try:
+            parsed = ast.literal_eval(payload)
+        except (ValueError, SyntaxError):
+            parsed = payload
+
+    if status is not None and isinstance(parsed, Mapping):
+        return safe_json({**dict(parsed), "http_status": status})
+    if status is not None:
+        return {"http_status": status, "message": str(parsed)}
+    return safe_json(parsed)
+
+
 def serialize_span(span: TraceSpan, include_payload: bool = True) -> JsonObject:
     result: JsonObject = {
         "id": span.id,
@@ -88,6 +120,7 @@ def serialize_span(span: TraceSpan, include_payload: bool = True) -> JsonObject:
         "total_tokens": span.total_tokens,
         "latency_ms": span.latency_ms,
         "error_message": span.error_message,
+        "error": parse_trace_error(span.error_message),
         "started_at": span.started_at.isoformat(),
         "ended_at": span.ended_at.isoformat() if span.ended_at else None,
     }

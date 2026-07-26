@@ -1,4 +1,5 @@
 from datetime import datetime
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -8,6 +9,7 @@ from redis.exceptions import RedisError
 
 import app.api.routers.coding_agent as coding_agent_module
 import app.tools.builtin as builtin_tools
+import app.tools.file_tools as file_tools_module
 from app.auth.dependencies import get_current_user
 from app.core.types import UserRole
 from app.db.session import get_db
@@ -161,6 +163,8 @@ async def test_coding_agent_run_endpoints_require_admin(monkeypatch):
             transport=transport, base_url="http://test"
         ) as client:
             responses = [
+                await client.get("/coding-agent/workspaces"),
+                await client.delete("/coding-agent/workspaces/import/example"),
                 await client.get("/coding-agent/runs"),
                 await client.get("/coding-agent/runs/other-run"),
                 await client.post(
@@ -169,7 +173,13 @@ async def test_coding_agent_run_endpoints_require_admin(monkeypatch):
                 ),
             ]
 
-            assert [response.status_code for response in responses] == [403, 403, 403]
+            assert [response.status_code for response in responses] == [
+                403,
+                403,
+                403,
+                403,
+                403,
+            ]
             assert all(
                 response.json()["detail"].startswith("需要管理员权限")
                 for response in responses
@@ -186,5 +196,85 @@ async def test_coding_agent_run_endpoints_require_admin(monkeypatch):
             allowed = await client.get("/coding-agent/runs")
             assert allowed.status_code == 200
             assert allowed.json() == []
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_admin_can_discover_and_import_coding_workspace(monkeypatch, tmp_path):
+    mounted_project = tmp_path / "mounted-project"
+    mounted_project.mkdir()
+    (mounted_project / "main.py").write_text("print('mounted')", encoding="utf-8")
+    large_project = tmp_path / "large-project"
+    large_project.mkdir()
+    for index in range(coding_agent_module.WORKSPACE_SCAN_FILE_LIMIT + 1):
+        (large_project / f"file-{index}.py").write_text("", encoding="utf-8")
+    monkeypatch.setattr(coding_agent_module.settings, "workspace_root", str(tmp_path))
+    monkeypatch.setattr(file_tools_module.settings, "workspace_root", str(tmp_path))
+
+    admin = SimpleNamespace(id="admin-id", role=UserRole.ADMIN)
+    app.dependency_overrides[get_current_user] = lambda: admin
+    transport = httpx.ASGITransport(app=app)
+
+    try:
+        async with httpx.AsyncClient(
+            transport=transport, base_url="http://test"
+        ) as client:
+            discovered = await client.get("/coding-agent/workspaces")
+            imported = await client.post(
+                "/coding-agent/workspaces/import",
+                files=[
+                    (
+                        "files",
+                        ("sample-project/src/app.py", b"print('hello')", "text/plain"),
+                    ),
+                    (
+                        "files",
+                        ("sample-project/.env", b"SECRET=value", "text/plain"),
+                    ),
+                ],
+            )
+            mixed_roots = await client.post(
+                "/coding-agent/workspaces/import",
+                files=[
+                    ("files", ("project-a/a.py", b"a = 1", "text/plain")),
+                    ("files", ("project-b/b.py", b"b = 2", "text/plain")),
+                ],
+            )
+
+        assert discovered.status_code == 200
+        assert any(
+            item["name"] == "mounted-project"
+            for item in discovered.json()["workspaces"]
+        )
+        large_option = next(
+            item
+            for item in discovered.json()["workspaces"]
+            if item["name"] == "large-project"
+        )
+        assert (
+            large_option["file_count"] == coding_agent_module.WORKSPACE_SCAN_FILE_LIMIT
+        )
+        assert large_option["file_count_truncated"] is True
+        assert imported.status_code == 201
+        imported_path = Path(imported.json()["path"])
+        assert (imported_path / "src" / "app.py").read_text() == "print('hello')"
+        assert not (imported_path / ".env").exists()
+        assert imported.json()["file_count"] == 1
+        assert imported.json()["name"] == "sample-project"
+        assert mixed_roots.status_code == 400
+        assert mixed_roots.json()["detail"] == "一次只能导入一个顶层文件夹"
+
+        async with httpx.AsyncClient(
+            transport=transport, base_url="http://test"
+        ) as client:
+            deleted = await client.delete(
+                f"/coding-agent/workspaces/import/{imported.json()['workspace_id']}"
+            )
+        assert deleted.status_code == 204
+        assert not imported_path.exists()
+        assert coding_agent_module._import_directory_name("中文项目").startswith(
+            "中文项目-"
+        )
     finally:
         app.dependency_overrides.clear()

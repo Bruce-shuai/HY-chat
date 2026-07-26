@@ -11,6 +11,20 @@ class AgentRunRequest(BaseModel):
     model: str | None = Field(default=None, description="可选：覆盖默认聊天模型")
 
 
+class CodingWorkspaceOption(BaseModel):
+    workspace_id: str
+    path: str
+    name: str
+    file_count: int
+    file_count_truncated: bool = False
+    source: str = Field(description="root、mounted 或 imported")
+
+
+class CodingWorkspaceListResponse(BaseModel):
+    root: str
+    workspaces: list[CodingWorkspaceOption]
+
+
 class AgentRunResponse(BaseModel):
     run_id: str
     status: str
