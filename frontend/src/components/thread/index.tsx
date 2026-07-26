@@ -127,6 +127,7 @@ export function Thread() {
   const stream = useStreamContext();
   const messages = stream.messages;
   const isLoading = stream.isLoading;
+  const isBusy = isLoading || stream.isRunSettling;
   const {
     chatStarted,
     firstTokenReceived,
@@ -277,7 +278,7 @@ export function Thread() {
     e.preventDefault();
     if (
       (input.trim().length === 0 && contentBlocks.length === 0) ||
-      isLoading ||
+      isBusy ||
       isThreadLoading
     )
       return;
@@ -307,6 +308,7 @@ export function Thread() {
   };
 
   const handleRegenerate = (parentCheckpointId: string | undefined) => {
+    if (isBusy) return;
     waitForFirstToken();
     stream.submit(undefined, {
       forkFrom: parentCheckpointId,
@@ -335,7 +337,7 @@ export function Thread() {
             className="relative h-full"
             style={{ width: 300 }}
           >
-            <ThreadHistory />
+            <ThreadHistory disabled={isBusy} />
           </div>
         </motion.div>
       </div>
@@ -407,7 +409,8 @@ export function Thread() {
                   )}
                 </div>
                 <motion.button
-                  className="flex min-w-0 cursor-pointer items-center gap-2"
+                  className="flex min-w-0 cursor-pointer items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={isBusy}
                   onClick={() => setThreadId(null)}
                   animate={{
                     marginLeft: !chatHistoryOpen ? 48 : 0,
@@ -431,6 +434,7 @@ export function Thread() {
                   className="p-4"
                   tooltip="新建会话"
                   variant="ghost"
+                  disabled={isBusy}
                   onClick={() => setThreadId(null)}
                 >
                   <SquarePen className="size-5" />
@@ -469,8 +473,11 @@ export function Thread() {
                   messages={visibleMessages}
                   resetKey={messageListResetKey}
                   threadId={threadId}
-                  onNewThread={() => setThreadId(null)}
+                  onNewThread={() => {
+                    if (!isBusy) setThreadId(null);
+                  }}
                   onOpenHistory={(reset) => {
+                    if (isBusy) return;
                     setChatHistoryOpen(true);
                     setThreadId(null);
                     reset();
@@ -623,18 +630,28 @@ export function Thread() {
                         {stream.isLoading ? (
                           <Button
                             key="stop"
+                            type="button"
                             onClick={() => stream.stop()}
                             className="ml-auto h-9 px-3 sm:h-10 sm:px-4"
                           >
                             <LoaderCircle className="h-4 w-4 animate-spin" />
                             停止
                           </Button>
+                        ) : stream.isRunSettling ? (
+                          <Button
+                            type="button"
+                            disabled
+                            className="ml-auto h-9 px-3 sm:h-10 sm:px-4"
+                          >
+                            <LoaderCircle className="h-4 w-4 animate-spin" />
+                            正在停止
+                          </Button>
                         ) : (
                           <Button
                             type="submit"
                             className="ml-auto h-9 px-3 shadow-md transition-all sm:h-10 sm:px-4"
                             disabled={
-                              isLoading ||
+                              isBusy ||
                               isThreadLoading ||
                               (!input.trim() && contentBlocks.length === 0)
                             }

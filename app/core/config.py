@@ -26,6 +26,30 @@ class Settings(BaseSettings):
         default="postgresql+psycopg://hy_chat:hy_chat_password@localhost:5432/hy_chat_db",
         alias="DATABASE_URL",
     )
+    database_connect_timeout_seconds: int = Field(
+        default=10,
+        ge=1,
+        le=60,
+        alias="DATABASE_CONNECT_TIMEOUT_SECONDS",
+    )
+    database_pool_timeout_seconds: int = Field(
+        default=10,
+        ge=1,
+        le=60,
+        alias="DATABASE_POOL_TIMEOUT_SECONDS",
+    )
+    database_statement_timeout_ms: int = Field(
+        default=120_000,
+        ge=1_000,
+        le=600_000,
+        alias="DATABASE_STATEMENT_TIMEOUT_MS",
+    )
+    database_tcp_user_timeout_ms: int = Field(
+        default=60_000,
+        ge=1_000,
+        le=300_000,
+        alias="DATABASE_TCP_USER_TIMEOUT_MS",
+    )
     redis_url: str = Field(default="redis://localhost:6379/0", alias="REDIS_URL")
 
     jwt_secret_key: str = Field(
@@ -84,13 +108,13 @@ class Settings(BaseSettings):
     )
     embedding_dimensions: int = Field(default=1024, alias="EMBEDDING_DIMENSIONS")
     zhipu_request_timeout: float = Field(
-        default=180.0,
+        default=120.0,
         gt=0,
         le=600,
         alias="ZHIPU_REQUEST_TIMEOUT",
     )
     zhipu_max_retries: int = Field(
-        default=1,
+        default=0,
         ge=0,
         le=3,
         alias="ZHIPU_MAX_RETRIES",

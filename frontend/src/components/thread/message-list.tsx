@@ -1,6 +1,7 @@
 import { type BaseMessage, isHumanMessage } from "@langchain/core/messages";
 import { AlertTriangle, LoaderCircle } from "lucide-react";
 
+import { isAgentRunTimeoutError } from "@/lib/agent-run-timeout";
 import { DO_NOT_RENDER_ID_PREFIX } from "@/lib/ensure-tool-responses";
 import { Button } from "../ui/button";
 import { LocalErrorBoundary } from "./thread-error-boundary";
@@ -106,7 +107,7 @@ function MessageItems({
     !isRunLoading &&
     !hasInterrupt &&
     !!lastMessage &&
-    isHumanMessage(lastMessage);
+    (isHumanMessage(lastMessage) || isAgentRunTimeoutError(runError));
 
   return (
     <>

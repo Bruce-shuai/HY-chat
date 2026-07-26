@@ -18,6 +18,25 @@ They also set `client_max_body_size 72m` so the configured 50 MB attachment
 limit and Base64-encoded chat attachments can reach the application. Keep this
 directive when updating either proxy host.
 
+`hy-chat-frontend.conf` mirrors the live frontend host for `hy-ai.xyz`,
+`www.hy-ai.xyz`, and `chat.hy-ai.xyz`. Always validate the complete file with
+`nginx -t` before reloading Nginx Proxy Manager; replacing it with a chat-only
+server block would take the root and `www` domains offline.
+
+## Run deadlines
+
+Production uses layered deadlines so a blocked provider call cannot leave the
+chat UI or every Agent worker waiting indefinitely:
+
+- browser consultation watchdog: 180 seconds, including queue time;
+- model transport request: 120 seconds with no automatic retry;
+- Agent worker execution: 240 seconds with isolated worker loops;
+- PostgreSQL connect/pool waits: 10 seconds, statement timeout: 120 seconds.
+
+The browser stops its stream first, then lists only the current thread's
+pending/running Runs and cancels their exact IDs. Do not replace that operation
+with a global status-based cancellation.
+
 ## Alibaba Cloud checklist
 
 The ECS security group must allow inbound TCP ports `80` and `443`. Port `22`
@@ -56,9 +75,12 @@ docker compose --env-file .env -f deploy/ecs/compose.yml ps
 # Recent logs
 docker compose --env-file .env -f deploy/ecs/compose.yml logs --tail=200
 
-# Pull source updates and rebuild
+# Pull source updates after loading the workflow-built frontend image.
 git pull --ff-only
-docker compose --env-file .env -f deploy/ecs/compose.yml up -d --build --wait
+docker compose --env-file .env -f deploy/ecs/compose.yml build api
+docker tag hy-chat-api:latest hy-chat-agent:latest
+docker compose --env-file .env -f deploy/ecs/compose.yml \
+  up -d --no-build --force-recreate api agent frontend --wait
 
 # Run database migrations manually when needed
 docker compose --env-file .env -f deploy/ecs/compose.yml run --rm api \
@@ -68,6 +90,11 @@ docker compose --env-file .env -f deploy/ecs/compose.yml run --rm api \
 docker exec hy-chat-postgres pg_dump -U hy_chat -d hy_chat_db -Fc \
   > "hy-chat-$(date +%Y%m%d-%H%M%S).dump"
 ```
+
+The ECS host is intentionally not used to compile the Next.js frontend. Run
+the `Build frontend deployment image` GitHub workflow for the release commit,
+download its Linux AMD64 image artifact, and load it with `docker load` before
+recreating the frontend service.
 
 Do not commit `/opt/hy-chat/.env`; it contains production secrets. Persistent
 data lives in Docker volumes and is not removed by a normal container rebuild.

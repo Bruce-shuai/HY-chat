@@ -16,6 +16,7 @@ from sqlalchemy.pool import StaticPool
 
 import app.agents.chat as chat_module
 import app.cache.service as cache_service_module
+import app.db.session as db_session_module
 import app.entrypoint as entrypoint_module
 from app.agents.chat import (
     HITL_TOOL_CONFIG,
@@ -118,17 +119,57 @@ def test_model_catalog_and_tool_registry(monkeypatch):
 
 def test_chat_model_has_bounded_provider_requests(monkeypatch):
     monkeypatch.setattr(catalog_module.settings, "zhipu_api_key", "test-api-key")
-    monkeypatch.setattr(catalog_module.settings, "zhipu_request_timeout", 180.0)
-    monkeypatch.setattr(catalog_module.settings, "zhipu_max_retries", 1)
+    monkeypatch.setattr(catalog_module.settings, "zhipu_request_timeout", 120.0)
+    monkeypatch.setattr(catalog_module.settings, "zhipu_max_retries", 0)
     catalog_module.get_chat_model.cache_clear()
 
     try:
         model = catalog_module.get_chat_model("glm-5.2")
 
-        assert model.request_timeout == 180.0
-        assert model.max_retries == 1
+        assert model.request_timeout == 120.0
+        assert model.max_retries == 0
     finally:
         catalog_module.get_chat_model.cache_clear()
+
+
+def test_postgres_engine_bounds_blocking_database_io(monkeypatch):
+    monkeypatch.setattr(
+        db_session_module.settings,
+        "database_connect_timeout_seconds",
+        10,
+    )
+    monkeypatch.setattr(
+        db_session_module.settings,
+        "database_pool_timeout_seconds",
+        10,
+    )
+    monkeypatch.setattr(
+        db_session_module.settings,
+        "database_statement_timeout_ms",
+        120_000,
+    )
+    monkeypatch.setattr(
+        db_session_module.settings,
+        "database_tcp_user_timeout_ms",
+        60_000,
+    )
+
+    options = db_session_module._database_engine_options(
+        "postgresql+psycopg://user:password@postgres/database"
+    )
+
+    assert options == {
+        "pool_pre_ping": True,
+        "pool_timeout": 10,
+        "connect_args": {
+            "connect_timeout": 10,
+            "options": "-c statement_timeout=120000",
+            "tcp_user_timeout": 60_000,
+        },
+    }
+    assert db_session_module._database_engine_options("sqlite://") == {
+        "pool_pre_ping": True
+    }
 
 
 def test_agent_entrypoint_configures_worker_concurrency(monkeypatch):

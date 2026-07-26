@@ -7,6 +7,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "test": "node --experimental-strip-types --test tests/*.test.mjs",
     "test:security": "node --experimental-strip-types --test tests/agent-api-policy.test.mjs",
     "lint": "next lint",
     "lint:fix": "next lint --fix",

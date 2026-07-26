@@ -6,6 +6,7 @@ services:
         NEXT_PUBLIC_API_URL: ${AGENT_PUBLIC_URL:-/api}
         NEXT_PUBLIC_ASSISTANT_ID: hy-chat
         NEXT_PUBLIC_BACKEND_URL: ${BACKEND_PUBLIC_URL:-http://localhost:8000}
+        NEXT_PUBLIC_CHAT_RUN_TIMEOUT_MS: ${NEXT_PUBLIC_CHAT_RUN_TIMEOUT_MS:-180000}
     container_name: hy-chat-ui
     ports:
       - "3000:3000"
@@ -20,9 +21,27 @@ services:
   agent:
     build: .
     container_name: hy-chat-agent
-    command: ["langgraph", "dev", "--host", "0.0.0.0", "--port", "2024", "--no-browser", "--no-reload", "--allow-blocking"]
+    command:
+      [
+        "langgraph",
+        "dev",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "2024",
+        "--no-browser",
+        "--no-reload",
+        "--allow-blocking",
+        "--n-jobs-per-worker",
+        "${AGENT_JOBS_PER_WORKER:-2}",
+      ]
     env_file:
       - .env
+    environment:
+      AGENT_JOBS_PER_WORKER: ${AGENT_JOBS_PER_WORKER:-2}
+      BG_JOB_TIMEOUT_SECS: ${BG_JOB_TIMEOUT_SECS:-240}
+      BG_JOB_MAX_RETRIES: ${BG_JOB_MAX_RETRIES:-1}
+      BG_JOB_ISOLATED_LOOPS: ${BG_JOB_ISOLATED_LOOPS:-true}
     expose:
       - "2024"
     volumes:

@@ -4,7 +4,10 @@ import React, {
   ReactNode,
   useState,
   useEffect,
+  useLayoutEffect,
   useMemo,
+  useCallback,
+  useRef,
 } from "react";
 import { useStream } from "@langchain/react";
 import { type BaseMessage } from "@langchain/core/messages";
@@ -23,6 +26,17 @@ import { toast } from "sonner";
 import { useAuth } from "./Auth";
 import { resolveApiUrl } from "./client";
 import { selectAgentApiUrl, userBearerHeaders } from "./agent-api-policy";
+import {
+  AgentRunTimeoutError,
+  AgentRunWatchdog,
+  ResumedRunLifecycleTracker,
+  resolveAgentRunTimeoutMs,
+} from "@/lib/agent-run-timeout";
+import {
+  cancelActiveThreadRuns,
+  cancelRunExactly,
+  DEFAULT_RUN_CANCEL_TIMEOUT_MS,
+} from "@/lib/agent-run-cancellation";
 
 export type StateType = {
   messages: BaseMessage[];
@@ -33,11 +47,38 @@ export type StateType = {
 
 const useTypedStream = useStream<StateType>;
 
-type StreamContextType = ReturnType<typeof useTypedStream>;
+type TypedStreamValue = ReturnType<typeof useTypedStream>;
+type StreamContextType = TypedStreamValue & {
+  isRunSettling: boolean;
+};
 const StreamContext = createContext<StreamContextType | undefined>(undefined);
+const STREAM_CALLER_OPTIONS = { maxRetries: 1 };
+
+type ActiveRun = {
+  threadId: string;
+  runId: string;
+};
 
 async function sleep(ms = 4000) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitAtMost(
+  promise: Promise<unknown> | undefined,
+  timeoutMs: number,
+): Promise<void> {
+  if (!promise) return;
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      promise,
+      new Promise<void>((resolve) => {
+        timeout = setTimeout(resolve, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
 }
 
 async function checkGraphStatus(
@@ -84,6 +125,185 @@ const StreamSession = ({
   const [threadId, setThreadId] = useQueryState("threadId");
   const { getThreads, setThreads } = useThreads();
   const resolvedApiUrl = resolveApiUrl(apiUrl);
+  const runTimeoutMs = useMemo(
+    () => resolveAgentRunTimeoutMs(process.env.NEXT_PUBLIC_CHAT_RUN_TIMEOUT_MS),
+    [],
+  );
+  const runWatchdogRef = useRef<AgentRunWatchdog | null>(null);
+  runWatchdogRef.current ??= new AgentRunWatchdog(runTimeoutMs);
+  const watchdogThreadIdRef = useRef<string | null>(threadId ?? null);
+  const wasStreamLoadingRef = useRef(false);
+  const approvalLifecycleUnsubscribeRef = useRef<(() => void) | null>(null);
+  const [controllerGeneration, setControllerGeneration] = useState(0);
+  const controllerGenerationRef = useRef(controllerGeneration);
+  controllerGenerationRef.current = controllerGeneration;
+  const controllerRunThreadIdsRef = useRef(
+    new Map<number, string | null>([[controllerGeneration, threadId ?? null]]),
+  );
+  const callbackGeneration = controllerGeneration;
+  const callerOptions = useMemo(() => {
+    // A new object intentionally replaces the SDK controller after a forced stop.
+    void controllerGeneration;
+    return { ...STREAM_CALLER_OPTIONS };
+  }, [controllerGeneration]);
+  const activeRunRef = useRef<ActiveRun | null>(null);
+  const currentThreadIdRef = useRef<string | null>(threadId ?? null);
+  const previousQueryThreadIdRef = useRef<string | null>(threadId ?? null);
+  const internalQueryThreadIdRef = useRef<string | null>(null);
+  const runThreadIdRef = useRef<string | null>(threadId ?? null);
+  const cancellationThreadIdRef = useRef<string | null>(null);
+  const cancellationGenerationRef = useRef(0);
+  const streamRef = useRef<TypedStreamValue | null>(null);
+  const mountedRef = useRef(true);
+  const isRunSettlingRef = useRef(false);
+  const [isRunSettling, setIsRunSettling] = useState(false);
+  const [timeoutState, setTimeoutState] = useState<{
+    threadId: string | null;
+    error: AgentRunTimeoutError;
+  } | null>(null);
+
+  const clearRunTimer = useCallback(() => {
+    runWatchdogRef.current?.clear();
+    watchdogThreadIdRef.current = null;
+    approvalLifecycleUnsubscribeRef.current?.();
+    approvalLifecycleUnsubscribeRef.current = null;
+  }, []);
+
+  const watchApprovalLifecycle = useCallback(
+    (current: TypedStreamValue) => {
+      approvalLifecycleUnsubscribeRef.current?.();
+      approvalLifecycleUnsubscribeRef.current = null;
+
+      const thread = current.getThread();
+      if (!thread) return;
+
+      const tracker = new ResumedRunLifecycleTracker();
+      approvalLifecycleUnsubscribeRef.current = thread.onEvent((event) => {
+        if (
+          event.method !== "lifecycle" ||
+          event.params.namespace.length !== 0
+        ) {
+          return;
+        }
+        if (tracker.observe(event.params.data?.event)) clearRunTimer();
+      });
+    },
+    [clearRunTimer],
+  );
+
+  const cancelThreadRuns = useCallback(
+    async (
+      current: TypedStreamValue,
+      targetThreadId: string,
+      knownRunId?: string,
+      transportCleanup?: Promise<unknown>,
+    ) => {
+      const generation = ++cancellationGenerationRef.current;
+      cancellationThreadIdRef.current = targetThreadId;
+      isRunSettlingRef.current = true;
+      if (mountedRef.current) setIsRunSettling(true);
+
+      try {
+        await Promise.all([
+          cancelActiveThreadRuns(
+            current.client.runs,
+            targetThreadId,
+            knownRunId,
+          ),
+          waitAtMost(transportCleanup, DEFAULT_RUN_CANCEL_TIMEOUT_MS),
+        ]);
+      } finally {
+        if (cancellationGenerationRef.current === generation) {
+          cancellationThreadIdRef.current = null;
+          isRunSettlingRef.current = false;
+          if (mountedRef.current) setIsRunSettling(false);
+        }
+      }
+    },
+    [],
+  );
+
+  const stopCurrentRun = useCallback(
+    async ({
+      cancel = true,
+      targetThreadId,
+      resetController = false,
+    }: {
+      cancel?: boolean;
+      targetThreadId?: string | null;
+      resetController?: boolean;
+    } = {}) => {
+      clearRunTimer();
+      const current = streamRef.current;
+      if (!current) return;
+
+      const target =
+        targetThreadId ??
+        runThreadIdRef.current ??
+        current.threadId ??
+        currentThreadIdRef.current;
+      const activeRun =
+        activeRunRef.current?.threadId === target ? activeRunRef.current : null;
+      activeRunRef.current = null;
+
+      const localStop = current
+        .stop({ cancel: false })
+        .catch((error) => console.warn("停止本地流式连接失败", error));
+      const transportCleanup =
+        cancel && resetController
+          ? current
+              .getThread()
+              ?.close()
+              .catch((error) => console.warn("关闭旧 Agent 连接失败", error))
+          : undefined;
+      if (cancel && resetController) {
+        setControllerGeneration((generation) => {
+          const nextGeneration = generation + 1;
+          controllerRunThreadIdsRef.current.set(
+            nextGeneration,
+            current.threadId ?? currentThreadIdRef.current,
+          );
+          return nextGeneration;
+        });
+      }
+      const remoteCancellation =
+        cancel && target
+          ? cancelThreadRuns(
+              current,
+              target,
+              activeRun?.runId,
+              transportCleanup,
+            )
+          : Promise.resolve();
+
+      await Promise.all([localStop, remoteCancellation]);
+    },
+    [cancelThreadRuns, clearRunTimer],
+  );
+
+  const armRunWatchdog = useCallback(
+    (targetThreadId: string | null) => {
+      watchdogThreadIdRef.current = targetThreadId;
+      setTimeoutState(null);
+      runWatchdogRef.current?.start(() => {
+        const timedThreadId =
+          watchdogThreadIdRef.current ??
+          runThreadIdRef.current ??
+          streamRef.current?.threadId ??
+          currentThreadIdRef.current;
+        setTimeoutState({
+          threadId: timedThreadId,
+          error: new AgentRunTimeoutError(runTimeoutMs),
+        });
+        void stopCurrentRun({
+          targetThreadId: timedThreadId,
+          resetController: true,
+        });
+      });
+    },
+    [runTimeoutMs, stopCurrentRun],
+  );
+
   const defaultHeaders = useMemo(
     () => ({
       ...(authScheme ? { "X-Auth-Scheme": authScheme } : {}),
@@ -95,15 +315,236 @@ const StreamSession = ({
     apiUrl: resolvedApiUrl,
     apiKey: apiKey ?? undefined,
     assistantId,
+    callerOptions,
     defaultHeaders,
     threadId: threadId ?? null,
     onThreadId: (id) => {
+      internalQueryThreadIdRef.current = id;
+      currentThreadIdRef.current = id;
+      runThreadIdRef.current = id;
+      controllerRunThreadIdsRef.current.set(callbackGeneration, id);
+      if (
+        runWatchdogRef.current?.isActive &&
+        watchdogThreadIdRef.current === null
+      ) {
+        watchdogThreadIdRef.current = id;
+      }
       setThreadId(id);
       // Refetch threads list when thread ID changes.
       // Wait for some seconds before fetching so we're able to get the new thread that was created.
       sleep().then(() => getThreads().then(setThreads).catch(console.error));
     },
+    onCreated: ({ runId }) => {
+      const current = streamRef.current;
+      const activeThreadId =
+        controllerRunThreadIdsRef.current.get(callbackGeneration) ??
+        currentThreadIdRef.current;
+      if (!current || !activeThreadId) return;
+
+      const activeRun = { threadId: activeThreadId, runId };
+      if (
+        callbackGeneration !== controllerGenerationRef.current ||
+        cancellationThreadIdRef.current === activeThreadId
+      ) {
+        void cancelRunExactly(current.client.runs, activeThreadId, runId);
+        return;
+      }
+      activeRunRef.current = activeRun;
+    },
+    onCompleted: ({ runId }) => {
+      if (callbackGeneration !== controllerGenerationRef.current) return;
+      if (!runId || activeRunRef.current?.runId === runId) {
+        activeRunRef.current = null;
+        clearRunTimer();
+      }
+    },
   });
+  streamRef.current = streamValue;
+
+  useLayoutEffect(() => {
+    const nextThreadId = threadId ?? null;
+    const previousThreadId = previousQueryThreadIdRef.current;
+    if (previousThreadId === nextThreadId) return;
+    previousQueryThreadIdRef.current = nextThreadId;
+
+    if (internalQueryThreadIdRef.current === nextThreadId) {
+      internalQueryThreadIdRef.current = null;
+      currentThreadIdRef.current = nextThreadId;
+      return;
+    }
+
+    internalQueryThreadIdRef.current = null;
+    const targetThreadId = runThreadIdRef.current ?? previousThreadId;
+    const current = streamRef.current;
+    const hasUnsettledRun =
+      runWatchdogRef.current?.isActive ||
+      current?.isLoading ||
+      activeRunRef.current !== null;
+    if (targetThreadId && hasUnsettledRun) {
+      setTimeoutState(null);
+      void stopCurrentRun({
+        targetThreadId,
+        resetController: true,
+      });
+    }
+
+    currentThreadIdRef.current = nextThreadId;
+    runThreadIdRef.current = nextThreadId;
+  }, [stopCurrentRun, threadId]);
+
+  const stopSafely = useCallback<StreamContextType["stop"]>(
+    async (options) => {
+      setTimeoutState(null);
+      const cancel = options?.cancel ?? true;
+      await stopCurrentRun({ cancel, resetController: cancel });
+    },
+    [stopCurrentRun],
+  );
+
+  const submitWithTimeout = useCallback<StreamContextType["submit"]>(
+    async (input, options) => {
+      if (isRunSettlingRef.current) return;
+      const current = streamRef.current;
+      if (!current) return;
+
+      runThreadIdRef.current =
+        options?.threadId ??
+        current.threadId ??
+        currentThreadIdRef.current ??
+        null;
+      controllerRunThreadIdsRef.current.set(
+        controllerGenerationRef.current,
+        runThreadIdRef.current,
+      );
+      activeRunRef.current = null;
+      armRunWatchdog(runThreadIdRef.current);
+      try {
+        await current.submit(input, {
+          ...options,
+          multitaskStrategy: options?.multitaskStrategy ?? "reject",
+        });
+      } catch (error) {
+        clearRunTimer();
+        throw error;
+      }
+    },
+    [armRunWatchdog, clearRunTimer],
+  );
+
+  const respondWithTimeout = useCallback<StreamContextType["respond"]>(
+    async (response, options) => {
+      if (isRunSettlingRef.current) return;
+      const current = streamRef.current;
+      if (!current) return;
+      runThreadIdRef.current =
+        current.threadId ?? currentThreadIdRef.current ?? null;
+      armRunWatchdog(runThreadIdRef.current);
+      watchApprovalLifecycle(current);
+      try {
+        await current.respond(response, options);
+      } catch (error) {
+        clearRunTimer();
+        throw error;
+      }
+    },
+    [armRunWatchdog, clearRunTimer, watchApprovalLifecycle],
+  );
+
+  const respondAllWithTimeout = useCallback<StreamContextType["respondAll"]>(
+    async (responsesById, options) => {
+      if (isRunSettlingRef.current) return;
+      const current = streamRef.current;
+      if (!current) return;
+      runThreadIdRef.current =
+        current.threadId ?? currentThreadIdRef.current ?? null;
+      armRunWatchdog(runThreadIdRef.current);
+      watchApprovalLifecycle(current);
+      try {
+        await current.respondAll(responsesById, options);
+      } catch (error) {
+        clearRunTimer();
+        throw error;
+      }
+    },
+    [armRunWatchdog, clearRunTimer, watchApprovalLifecycle],
+  );
+
+  useEffect(() => {
+    const wasLoading = wasStreamLoadingRef.current;
+    wasStreamLoadingRef.current = streamValue.isLoading;
+    if (!streamValue.isLoading) {
+      if (wasLoading) clearRunTimer();
+      return;
+    }
+
+    const targetThreadId =
+      runThreadIdRef.current ??
+      streamValue.threadId ??
+      currentThreadIdRef.current;
+    armRunWatchdog(targetThreadId);
+  }, [
+    armRunWatchdog,
+    clearRunTimer,
+    streamValue.isLoading,
+    streamValue.threadId,
+  ]);
+
+  const visibleTimeoutError =
+    timeoutState?.threadId === streamValue.threadId
+      ? timeoutState.error
+      : undefined;
+  const contextValue = useMemo<StreamContextType>(
+    () => ({
+      ...streamValue,
+      error: visibleTimeoutError ?? streamValue.error,
+      stop: stopSafely,
+      submit: submitWithTimeout,
+      respond: respondWithTimeout,
+      respondAll: respondAllWithTimeout,
+      isRunSettling,
+    }),
+    [
+      streamValue,
+      visibleTimeoutError,
+      stopSafely,
+      submitWithTimeout,
+      respondWithTimeout,
+      respondAllWithTimeout,
+      isRunSettling,
+    ],
+  );
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      clearRunTimer();
+      const current = streamRef.current;
+      const targetThreadId =
+        runThreadIdRef.current ??
+        current?.threadId ??
+        currentThreadIdRef.current;
+      const knownRunId =
+        activeRunRef.current?.threadId === targetThreadId
+          ? activeRunRef.current.runId
+          : undefined;
+      const hasUnsettledRun =
+        runWatchdogRef.current?.isActive ||
+        current?.isLoading ||
+        activeRunRef.current !== null ||
+        isRunSettlingRef.current;
+      if (current && hasUnsettledRun) {
+        void current.stop({ cancel: false });
+        if (targetThreadId) {
+          void cancelActiveThreadRuns(
+            current.client.runs,
+            targetThreadId,
+            knownRunId,
+          );
+        }
+      }
+    };
+  }, [clearRunTimer]);
 
   useEffect(() => {
     checkGraphStatus(resolvedApiUrl, apiKey, authScheme, accessToken).then(
@@ -126,7 +567,7 @@ const StreamSession = ({
   }, [apiKey, resolvedApiUrl, authScheme, accessToken]);
 
   return (
-    <StreamContext.Provider value={streamValue}>
+    <StreamContext.Provider value={contextValue}>
       {children}
     </StreamContext.Provider>
   );
@@ -141,12 +582,19 @@ function buildStreamSessionKey({
   apiUrl,
   assistantId,
   authScheme,
+  accessToken,
 }: {
   apiUrl?: string;
   assistantId?: string;
   authScheme?: string;
+  accessToken?: string | null;
 }) {
-  return [apiUrl ?? "", assistantId ?? "", authScheme ?? ""].join(":");
+  return [
+    apiUrl ?? "",
+    assistantId ?? "",
+    authScheme ?? "",
+    accessToken ?? "",
+  ].join(":");
 }
 
 export const StreamProvider: React.FC<{ children: ReactNode }> = ({
@@ -198,6 +646,7 @@ export const StreamProvider: React.FC<{ children: ReactNode }> = ({
     apiUrl: finalApiUrl,
     assistantId: finalAssistantId,
     authScheme: finalAuthScheme,
+    accessToken,
   });
 
   // Show the form if we: don't have an API URL, or don't have an assistant ID

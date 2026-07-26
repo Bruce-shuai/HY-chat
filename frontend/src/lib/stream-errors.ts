@@ -1,4 +1,5 @@
 import { appendAdminContact } from "./admin-contact";
+import { isAgentRunTimeoutError } from "./agent-run-timeout";
 
 export function getErrorMessage(error: unknown): string {
   if (error instanceof Error) {
@@ -59,12 +60,25 @@ export type KnownStreamErrorInfo = {
   title: string;
   description: string;
   kind:
-    "rate-limit" | "high-cost-tool" | "model-permission" | "quota" | "network";
+    | "rate-limit"
+    | "high-cost-tool"
+    | "model-permission"
+    | "quota"
+    | "network"
+    | "timeout";
 };
 
 export function getKnownStreamErrorInfo(
   error: unknown,
 ): KnownStreamErrorInfo | null {
+  if (isAgentRunTimeoutError(error)) {
+    return {
+      kind: "timeout",
+      title: "本次回答等待时间过长",
+      description: "已停止等待并尝试取消本次请求，你可以稍后重试。",
+    };
+  }
+
   const message = getErrorMessage(error);
   const searchText = [message, collectErrorText(error)]
     .filter(Boolean)

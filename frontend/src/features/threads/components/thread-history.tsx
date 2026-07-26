@@ -18,7 +18,7 @@ import { useThreads } from "@/providers/Thread";
 
 import { ThreadList } from "./thread-list";
 
-export function ThreadHistory() {
+export function ThreadHistory({ disabled = false }: { disabled?: boolean }) {
   const isLargeScreen = useMediaQuery("(min-width: 1024px)");
   const [, setThreadId] = useQueryState("threadId");
   const [chatHistoryOpen, setChatHistoryOpen] = useQueryState(
@@ -58,13 +58,17 @@ export function ThreadHistory() {
         <Button
           className="mx-3 w-[calc(100%-1.5rem)] justify-start gap-2"
           variant="outline"
+          disabled={disabled}
           onClick={() => {
             void setThreadId(null);
           }}
         >
           <MessageSquarePlus className="size-4" /> 新建会话
         </Button>
-        <ThreadList threads={threads} />
+        <ThreadList
+          threads={threads}
+          disabled={disabled}
+        />
       </div>
       <div className="lg:hidden">
         <Sheet
@@ -83,6 +87,7 @@ export function ThreadHistory() {
             </SheetHeader>
             <ThreadList
               threads={threads}
+              disabled={disabled}
               onThreadClick={() => setChatHistoryOpen((o) => !o)}
             />
           </SheetContent>

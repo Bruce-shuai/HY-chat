@@ -13,11 +13,13 @@ import { getThreadTitle } from "../lib/thread-title";
 
 type ThreadListProps = {
   threads: Thread[];
+  disabled?: boolean;
   onThreadClick?: (threadId: string) => void;
 };
 
 type ThreadTitleEditorProps = {
   draftTitle: string;
+  disabled: boolean;
   isSaving: boolean;
   onCancel: () => void;
   onChange: (title: string) => void;
@@ -26,6 +28,7 @@ type ThreadTitleEditorProps = {
 
 function ThreadTitleEditor({
   draftTitle,
+  disabled,
   isSaving,
   onCancel,
   onChange,
@@ -49,14 +52,14 @@ function ThreadTitleEditor({
           }
         }}
         autoFocus
-        disabled={isSaving}
+        disabled={disabled || isSaving}
         className="bg-background h-8 flex-1 px-2 text-sm"
         aria-label="会话名称"
       />
       <TooltipIconButton
         type="submit"
         tooltip="保存"
-        disabled={isSaving}
+        disabled={disabled || isSaving}
         className="size-8"
       >
         {isSaving ? (
@@ -68,7 +71,7 @@ function ThreadTitleEditor({
       <TooltipIconButton
         type="button"
         tooltip="取消"
-        disabled={isSaving}
+        disabled={disabled || isSaving}
         className="size-8"
         onClick={onCancel}
       >
@@ -79,6 +82,7 @@ function ThreadTitleEditor({
 }
 
 type ThreadListItemProps = {
+  disabled: boolean;
   isActive: boolean;
   isDeleting: boolean;
   onDelete: () => void;
@@ -88,6 +92,7 @@ type ThreadListItemProps = {
 };
 
 function ThreadListItem({
+  disabled,
   isActive,
   isDeleting,
   onDelete,
@@ -102,6 +107,7 @@ function ThreadListItem({
       <Button
         variant="ghost"
         className={`h-10 min-w-0 flex-1 justify-start px-3 text-left font-normal hover:bg-transparent ${isActive ? "font-medium" : ""}`}
+        disabled={disabled}
         onClick={(event) => {
           event.preventDefault();
           onOpen();
@@ -124,7 +130,7 @@ function ThreadListItem({
             event.stopPropagation();
             onEdit();
           }}
-          disabled={isDeleting}
+          disabled={disabled || isDeleting}
         >
           <Pencil className="size-4" />
         </TooltipIconButton>
@@ -137,7 +143,7 @@ function ThreadListItem({
             event.stopPropagation();
             onDelete();
           }}
-          disabled={isDeleting}
+          disabled={disabled || isDeleting}
         >
           {isDeleting ? (
             <LoaderCircle className="size-4 animate-spin" />
@@ -150,7 +156,11 @@ function ThreadListItem({
   );
 }
 
-export function ThreadList({ threads, onThreadClick }: ThreadListProps) {
+export function ThreadList({
+  threads,
+  disabled = false,
+  onThreadClick,
+}: ThreadListProps) {
   const [threadId, setThreadId] = useQueryState("threadId");
   const { renameThread, deleteThread } = useThreads();
   const [editingThreadId, setEditingThreadId] = useState<string | null>(null);
@@ -222,6 +232,7 @@ export function ThreadList({ threads, onThreadClick }: ThreadListProps) {
             {isEditing ? (
               <ThreadTitleEditor
                 draftTitle={draftTitle}
+                disabled={disabled}
                 isSaving={isSaving}
                 onCancel={() => setEditingThreadId(null)}
                 onChange={setDraftTitle}
@@ -229,6 +240,7 @@ export function ThreadList({ threads, onThreadClick }: ThreadListProps) {
               />
             ) : (
               <ThreadListItem
+                disabled={disabled}
                 isActive={isActive}
                 isDeleting={isDeleting}
                 title={getThreadTitle(thread)}
