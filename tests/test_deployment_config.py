@@ -29,7 +29,8 @@ def test_ecs_backend_dependencies_have_unique_mac_addresses() -> None:
     services = compose["services"]
 
     dependency_macs = {
-        name: services[name]["mac_address"] for name in ("postgres", "redis")
+        name: services[name]["networks"]["default"]["mac_address"]
+        for name in ("postgres", "redis")
     }
 
     assert dependency_macs == {
