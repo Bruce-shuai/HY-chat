@@ -104,6 +104,8 @@ def test_model_catalog_and_tool_registry(monkeypatch):
     assert models[1].tier == "高性能"
     assert models[2].tier == "工具增强"
     assert all(model.label != model.id for model in models)
+    assert all(not model.supports_images for model in models)
+    assert catalog_module.model_supports_images("glm-5v-turbo")
     assert catalog_module.normalize_model_allowlist(
         ["glm-5.2", "glm-4-flash", "glm-4-plus", "glm-4.5"]
     ) == ["glm-5.2", "glm-5.1", "glm-5-turbo"]
@@ -536,7 +538,8 @@ def test_frontend_image_blocks_are_normalized_for_chat_models():
                     },
                 ]
             )
-        ]
+        ],
+        supports_images=True,
     )
 
     assert isinstance(message, HumanMessage)
@@ -551,6 +554,62 @@ def test_frontend_image_blocks_are_normalized_for_chat_models():
             "mime_type": "image/png",
         },
     ]
+
+
+def test_text_models_replace_images_across_message_history():
+    messages = _normalize_multimodal_messages(
+        [
+            HumanMessage(
+                content=[
+                    {"type": "text", "text": "识别图片里的文字"},
+                    {
+                        "type": "image",
+                        "mimeType": "image/png",
+                        "data": "abc123",
+                        "metadata": {"name": "screenshot.png"},
+                    },
+                ]
+            ),
+            AIMessage(content="请补充说明"),
+            HumanMessage(content=[{"type": "text", "text": "继续分析"}]),
+        ],
+        supports_images=False,
+    )
+
+    first_content = messages[0].content
+    assert [block["type"] for block in first_content] == ["text", "text"]
+    assert "screenshot.png" in first_content[1]["text"]
+    assert "不支持读取图片内容" in first_content[1]["text"]
+    assert "data" not in first_content[1]
+    assert messages[2].content == [{"type": "text", "text": "继续分析"}]
+
+
+def test_text_models_replace_openai_and_legacy_image_blocks():
+    [message] = _normalize_multimodal_messages(
+        [
+            HumanMessage(
+                content=[
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": "data:image/png;base64,abc"},
+                    },
+                    {
+                        "type": "file",
+                        "mimeType": "image/jpeg",
+                        "data": "def",
+                        "metadata": {"filename": "legacy.jpg"},
+                    },
+                ]
+            )
+        ],
+        supports_images=False,
+    )
+
+    assert [block["type"] for block in message.content] == ["text", "text"]
+    assert all(
+        "image_url" not in block and "data" not in block for block in message.content
+    )
+    assert "legacy.jpg" in message.content[1]["text"]
 
 
 def test_frontend_pdf_blocks_are_converted_to_text_for_chat_models():
@@ -954,7 +1013,7 @@ def test_model_call_extracts_memory_before_normalizing_pdf_text(monkeypatch):
     monkeypatch.setattr(
         chat_module,
         "_normalize_multimodal_messages",
-        lambda _messages: [HumanMessage(content="我叫 PDF文档名")],
+        lambda _messages, **_kwargs: [HumanMessage(content="我叫 PDF文档名")],
     )
     request = ModelRequest(
         model=SimpleNamespace(),

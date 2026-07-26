@@ -49,7 +49,7 @@ from app.core.logging import configure_logging
 from app.core.types import JsonObject, ToolInvocationStatus
 from app.db.models import Conversation, TraceSpan
 from app.db.session import SessionLocal
-from app.models.catalog import get_chat_model, resolve_model
+from app.models.catalog import get_chat_model, model_supports_images, resolve_model
 from app.policies.service import (
     PolicyViolation,
     authorize_model_access,
@@ -381,6 +381,39 @@ def _normalize_frontend_multimodal_block(
     return normalized
 
 
+def _is_image_content_block(block: Mapping[str, object]) -> bool:
+    block_type = block.get("type")
+    if block_type in {"image", "image_url"}:
+        return True
+    mime_type = block.get("mime_type") or block.get("mimeType")
+    return (
+        block_type == "file"
+        and isinstance(mime_type, str)
+        and mime_type.startswith("image/")
+    )
+
+
+def _unsupported_image_text_block(
+    block: Mapping[str, object],
+) -> dict[str, str]:
+    metadata = block.get("metadata")
+    filename = block.get("filename")
+    if not filename and isinstance(metadata, Mapping):
+        filename = metadata.get("filename") or metadata.get("name")
+    label = (
+        str(filename).strip()
+        if isinstance(filename, str) and filename.strip()
+        else "图片附件"
+    )
+    return {
+        "type": "text",
+        "text": (
+            f"[用户上传了图片：{label}。当前所选模型不支持读取图片内容。"
+            "请不要推测图片内容，并提示用户改用文字描述。]"
+        ),
+    }
+
+
 def _attachment_filename(block: Mapping[str, object]) -> str:
     candidate = block.get("filename")
     metadata = block.get("metadata")
@@ -537,6 +570,7 @@ def _normalize_content_block(
     block: Mapping[str, object],
     *,
     budget: _PdfNormalizationBudget | None = None,
+    supports_images: bool,
 ) -> dict[str, object]:
     pdf_text_block = _pdf_file_block_to_text(
         block,
@@ -544,6 +578,8 @@ def _normalize_content_block(
     )
     if pdf_text_block is not None:
         return pdf_text_block
+    if not supports_images and _is_image_content_block(block):
+        return _unsupported_image_text_block(block)
     return _normalize_frontend_multimodal_block(block)
 
 
@@ -561,12 +597,17 @@ def _normalize_multimodal_content(
     content: object,
     *,
     budget: _PdfNormalizationBudget | None = None,
+    supports_images: bool,
 ) -> object:
     if budget is None:
         budget = _PdfNormalizationBudget()
         _validate_pdf_history_blocks(_multimodal_content_blocks(content))
     if isinstance(content, Mapping):
-        return _normalize_content_block(content, budget=budget)
+        return _normalize_content_block(
+            content,
+            budget=budget,
+            supports_images=supports_images,
+        )
     if isinstance(content, Sequence) and not isinstance(
         content, str | bytes | bytearray
     ):
@@ -574,6 +615,7 @@ def _normalize_multimodal_content(
             _normalize_content_block(
                 block,
                 budget=budget,
+                supports_images=supports_images,
             )
             if isinstance(block, Mapping)
             else block
@@ -584,6 +626,8 @@ def _normalize_multimodal_content(
 
 def _normalize_multimodal_messages(
     messages: Sequence[BaseMessage | Mapping[str, object]],
+    *,
+    supports_images: bool = False,
 ) -> list[BaseMessage | dict[str, object]]:
     message_list = list(messages)
     pdf_blocks: list[Mapping[str, object]] = []
@@ -604,6 +648,7 @@ def _normalize_multimodal_messages(
             normalized["content"] = _normalize_multimodal_content(
                 normalized.get("content", ""),
                 budget=budget,
+                supports_images=supports_images,
             )
             normalized_messages.append(normalized)
         else:
@@ -613,6 +658,7 @@ def _normalize_multimodal_messages(
                         "content": _normalize_multimodal_content(
                             getattr(message, "content", ""),
                             budget=budget,
+                            supports_images=supports_images,
                         )
                     }
                 )
@@ -880,7 +926,10 @@ class PolicyTraceMiddleware(AgentMiddleware):
                 )
                 request = _append_memory_to_request(request, db, user_id, thread_id)
             request = request.override(
-                messages=_normalize_multimodal_messages(request.messages)
+                messages=_normalize_multimodal_messages(
+                    request.messages,
+                    supports_images=model_supports_images(selected),
+                )
             )
             cache_key = build_request_cache_key(request, user_id, selected)
             trace = None

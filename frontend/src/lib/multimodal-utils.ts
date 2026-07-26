@@ -15,6 +15,7 @@ const SUPPORTED_IMAGE_TYPES = [
   "image/gif",
   "image/webp",
 ];
+const IMAGE_UPLOAD_ENABLED = false;
 
 const SUPPORTED_DOCUMENT_TYPES = ["application/pdf"];
 
@@ -110,7 +111,7 @@ type Base64Payload = {
 };
 
 export const UPLOAD_ATTACHMENT_ACCEPT = [
-  ...SUPPORTED_IMAGE_TYPES,
+  ...(IMAGE_UPLOAD_ENABLED ? SUPPORTED_IMAGE_TYPES : []),
   ...SUPPORTED_DOCUMENT_TYPES,
   ".bash",
   ".c",
@@ -161,7 +162,7 @@ export function inferTextFileLanguage(file: File) {
 
 export function isSupportedUploadFile(file: File) {
   return (
-    SUPPORTED_IMAGE_TYPES.includes(file.type) ||
+    (IMAGE_UPLOAD_ENABLED && SUPPORTED_IMAGE_TYPES.includes(file.type)) ||
     SUPPORTED_DOCUMENT_TYPES.includes(file.type) ||
     isSupportedTextFile(file)
   );
@@ -297,7 +298,9 @@ export async function fileToContentBlock(
   file: File,
 ): Promise<ChatContentBlock> {
   if (!isSupportedUploadFile(file)) {
-    toast.error("不支持这种文件，请上传图片、PDF 或代码/文本文件。");
+    toast.error(
+      "不支持这种文件，请上传 PDF 或代码/文本文件；当前模型暂不支持图片理解。",
+    );
     return Promise.reject(new Error("不支持这种文件"));
   }
 

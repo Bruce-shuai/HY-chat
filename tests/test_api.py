@@ -64,6 +64,9 @@ async def test_system_endpoints_and_sse(monkeypatch):
                 "glm-5.1",
                 "glm-5-turbo",
             ]
+            assert all(
+                item["supports_images"] is False for item in model_payload["models"]
+            )
             assert model_payload["policy"]["allowed_models"] == [
                 "glm-5.2",
                 "glm-5.1",

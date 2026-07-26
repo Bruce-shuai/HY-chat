@@ -87,7 +87,7 @@ export function useFileUpload({
   const handleFileUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     await addFiles(
       Array.from(e.target.files ?? []),
-      "文件类型不支持。请上传图片、PDF 或代码/文本文件。",
+      "文件类型不支持。请上传 PDF 或代码/文本文件；当前模型暂不支持图片理解。",
     );
     e.target.value = "";
   };
@@ -122,7 +122,7 @@ export function useFileUpload({
 
       await addFiles(
         Array.from(e.dataTransfer.files),
-        "文件类型不支持。请上传图片、PDF 或代码/文本文件。",
+        "文件类型不支持。请上传 PDF 或代码/文本文件；当前模型暂不支持图片理解。",
       );
     };
     const handleWindowDragEnd = (e: DragEvent) => {
@@ -204,7 +204,7 @@ export function useFileUpload({
     e.preventDefault();
     await addFiles(
       files,
-      "粘贴的文件类型不支持。请粘贴图片、PDF 或代码/文本文件。",
+      "粘贴的文件类型不支持。请粘贴 PDF 或代码/文本文件；当前模型暂不支持图片理解。",
     );
   };
 

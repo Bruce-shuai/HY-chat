@@ -22,6 +22,7 @@ class ModelInfo:
     quality_rank: int
     supports_streaming: bool = True
     supports_tools: bool = True
+    supports_images: bool = False
 
     def to_dict(self) -> JsonObject:
         return asdict(self)
@@ -65,6 +66,14 @@ LEGACY_MODEL_IDS = frozenset(
         "glm-4-flash",
     }
 )
+
+IMAGE_CAPABLE_MODEL_IDS = frozenset({"glm-5v-turbo"})
+
+
+def model_supports_images(model_id: str) -> bool:
+    """Deny image input by default unless a model is explicitly verified."""
+
+    return model_id in IMAGE_CAPABLE_MODEL_IDS
 
 
 def normalize_model_allowlist(model_ids: list[str] | None) -> list[str]:
@@ -110,6 +119,7 @@ def list_models() -> list[ModelInfo]:
             tier=profile.tier,
             description=profile.description,
             quality_rank=profile.quality_rank,
+            supports_images=model_supports_images(model_id),
         )
         for model_id in models
         for profile in [get_model_profile(model_id)]
