@@ -382,22 +382,60 @@ def _normalize_frontend_multimodal_block(
 
 
 def _is_image_content_block(block: Mapping[str, object]) -> bool:
+    def is_image_mime(value: object) -> bool:
+        return isinstance(value, str) and value.strip().lower().startswith("image/")
+
+    def is_image_data_url(value: object) -> bool:
+        return isinstance(value, str) and value.strip().lower().startswith(
+            "data:image/"
+        )
+
     block_type = block.get("type")
-    if block_type in {"image", "image_url"}:
+    if block_type in {"image", "image_url", "input_image"}:
         return True
-    mime_type = block.get("mime_type") or block.get("mimeType")
-    return (
-        block_type == "file"
-        and isinstance(mime_type, str)
-        and mime_type.startswith("image/")
+    mime_type = (
+        block.get("mime_type")
+        or block.get("mimeType")
+        or block.get("media_type")
+        or block.get("mediaType")
+        or block.get("content_type")
+        or block.get("contentType")
     )
+    source = block.get("source")
+    if not mime_type and isinstance(source, Mapping):
+        mime_type = (
+            source.get("media_type")
+            or source.get("mediaType")
+            or source.get("mime_type")
+            or source.get("mimeType")
+        )
+    nested_file = block.get("file")
+    if block_type == "file" and isinstance(nested_file, Mapping):
+        nested_mime_type = (
+            nested_file.get("media_type")
+            or nested_file.get("mediaType")
+            or nested_file.get("mime_type")
+            or nested_file.get("mimeType")
+            or nested_file.get("content_type")
+            or nested_file.get("contentType")
+        )
+        nested_data = nested_file.get("file_data") or nested_file.get("url")
+        if is_image_mime(nested_mime_type) or is_image_data_url(nested_data):
+            return True
+    direct_url = block.get("url")
+    if block_type == "file" and is_image_data_url(direct_url):
+        return True
+    return block_type in {"file", "media"} and is_image_mime(mime_type)
 
 
 def _unsupported_image_text_block(
     block: Mapping[str, object],
 ) -> dict[str, str]:
     metadata = block.get("metadata")
-    filename = block.get("filename")
+    filename = block.get("filename") or block.get("name")
+    nested_file = block.get("file")
+    if not filename and isinstance(nested_file, Mapping):
+        filename = nested_file.get("filename") or nested_file.get("name")
     if not filename and isinstance(metadata, Mapping):
         filename = metadata.get("filename") or metadata.get("name")
     label = (

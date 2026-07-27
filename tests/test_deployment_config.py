@@ -122,3 +122,13 @@ def test_frontend_proxy_streaming_has_bounded_unbuffered_reads() -> None:
     assert config.count("proxy_buffering off;") >= 6
     assert config.count("proxy_cache off;") == 3
     assert config.count("proxy_read_timeout 250s;") == 3
+    assert config.count("location ^~ /_next/static/ {") == 3
+    assert 'Cache-Control "public, max-age=31536000, immutable"' not in config
+    assert config.count("proxy_hide_header Cache-Control;") == 3
+    assert (
+        config.count(
+            'add_header Cache-Control "private, no-store, no-cache, '
+            'must-revalidate, max-age=0" always;'
+        )
+        == 3
+    )

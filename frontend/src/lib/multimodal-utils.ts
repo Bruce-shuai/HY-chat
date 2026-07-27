@@ -1,4 +1,4 @@
-import { ContentBlock } from "@langchain/core/messages";
+import type { ContentBlock } from "@langchain/core/messages";
 import { toast } from "sonner";
 
 export type TextContentBlock = {
@@ -15,7 +15,15 @@ const SUPPORTED_IMAGE_TYPES = [
   "image/gif",
   "image/webp",
 ];
-const IMAGE_UPLOAD_ENABLED = false;
+const IMAGE_FILE_EXTENSIONS = new Set([
+  ".gif",
+  ".heic",
+  ".heif",
+  ".jpeg",
+  ".jpg",
+  ".png",
+  ".webp",
+]);
 
 const SUPPORTED_DOCUMENT_TYPES = ["application/pdf"];
 
@@ -110,8 +118,7 @@ type Base64Payload = {
   optimized: boolean;
 };
 
-export const UPLOAD_ATTACHMENT_ACCEPT = [
-  ...(IMAGE_UPLOAD_ENABLED ? SUPPORTED_IMAGE_TYPES : []),
+const DOCUMENT_AND_TEXT_ACCEPT = [
   ...SUPPORTED_DOCUMENT_TYPES,
   ".bash",
   ".c",
@@ -149,7 +156,14 @@ export const UPLOAD_ATTACHMENT_ACCEPT = [
   ".xml",
   ".yaml",
   ".yml",
-].join(",");
+];
+
+export function buildUploadAttachmentAccept(allowImages: boolean) {
+  return [
+    ...(allowImages ? SUPPORTED_IMAGE_TYPES : []),
+    ...DOCUMENT_AND_TEXT_ACCEPT,
+  ].join(",");
+}
 
 function getFileExtension(filename: string) {
   const index = filename.lastIndexOf(".");
@@ -160,19 +174,28 @@ export function inferTextFileLanguage(file: File) {
   return CODE_EXTENSION_LANGUAGE[getFileExtension(file.name)] ?? "text";
 }
 
-export function isSupportedUploadFile(file: File) {
+export function isSupportedUploadFile(file: File, allowImages = false) {
+  const mimeType = file.type.trim().toLowerCase();
+  if (
+    mimeType.startsWith("image/") ||
+    IMAGE_FILE_EXTENSIONS.has(getFileExtension(file.name))
+  ) {
+    return allowImages && SUPPORTED_IMAGE_TYPES.includes(mimeType);
+  }
   return (
-    (IMAGE_UPLOAD_ENABLED && SUPPORTED_IMAGE_TYPES.includes(file.type)) ||
-    SUPPORTED_DOCUMENT_TYPES.includes(file.type) ||
-    isSupportedTextFile(file)
+    SUPPORTED_DOCUMENT_TYPES.includes(file.type) || isSupportedTextFile(file)
   );
 }
 
 export function isSupportedTextFile(file: File) {
+  const mimeType = file.type.trim().toLowerCase();
   const extension = getFileExtension(file.name);
+  if (mimeType.startsWith("image/") || IMAGE_FILE_EXTENSIONS.has(extension)) {
+    return false;
+  }
   return (
-    file.type.startsWith("text/") ||
-    SUPPORTED_TEXT_MIME_TYPES.has(file.type) ||
+    mimeType.startsWith("text/") ||
+    SUPPORTED_TEXT_MIME_TYPES.has(mimeType) ||
     extension in CODE_EXTENSION_LANGUAGE
   );
 }
@@ -296,8 +319,9 @@ async function textFileToContentBlock(file: File): Promise<TextContentBlock> {
 // Returns a Promise of a typed content block for images, PDFs, or text/code files.
 export async function fileToContentBlock(
   file: File,
+  allowImages = false,
 ): Promise<ChatContentBlock> {
-  if (!isSupportedUploadFile(file)) {
+  if (!isSupportedUploadFile(file, allowImages)) {
     toast.error(
       "不支持这种文件，请上传 PDF 或代码/文本文件；当前模型暂不支持图片理解。",
     );
@@ -383,5 +407,73 @@ export function isTextContentBlock(block: unknown): block is TextContentBlock {
     block !== null &&
     (block as { type?: unknown }).type === "text" &&
     typeof (block as { text?: unknown }).text === "string"
+  );
+}
+
+export function isImageContentBlock(block: unknown): boolean {
+  if (typeof block !== "object" || block === null) return false;
+  const candidate = block as Record<string, unknown>;
+  const type = candidate.type;
+  if (type === "image" || type === "image_url" || type === "input_image") {
+    return true;
+  }
+
+  let mimeType =
+    candidate.mimeType ??
+    candidate.mime_type ??
+    candidate.mediaType ??
+    candidate.media_type ??
+    candidate.contentType ??
+    candidate.content_type;
+  const source = candidate.source;
+  if (
+    !mimeType &&
+    typeof source === "object" &&
+    source !== null &&
+    !Array.isArray(source)
+  ) {
+    const sourceBlock = source as Record<string, unknown>;
+    mimeType =
+      sourceBlock.mimeType ??
+      sourceBlock.mime_type ??
+      sourceBlock.mediaType ??
+      sourceBlock.media_type;
+  }
+  const nestedFile = candidate.file;
+  if (
+    type === "file" &&
+    typeof nestedFile === "object" &&
+    nestedFile !== null &&
+    !Array.isArray(nestedFile)
+  ) {
+    const fileBlock = nestedFile as Record<string, unknown>;
+    const nestedMimeType =
+      fileBlock.mimeType ??
+      fileBlock.mime_type ??
+      fileBlock.mediaType ??
+      fileBlock.media_type ??
+      fileBlock.contentType ??
+      fileBlock.content_type;
+    const nestedData = fileBlock.file_data ?? fileBlock.url;
+    if (isImageMimeType(nestedMimeType) || isImageDataUrl(nestedData)) {
+      return true;
+    }
+  }
+  if (type === "file" && isImageDataUrl(candidate.url)) {
+    return true;
+  }
+  return (type === "file" || type === "media") && isImageMimeType(mimeType);
+}
+
+function isImageMimeType(value: unknown) {
+  return (
+    typeof value === "string" && value.trim().toLowerCase().startsWith("image/")
+  );
+}
+
+function isImageDataUrl(value: unknown) {
+  return (
+    typeof value === "string" &&
+    value.trim().toLowerCase().startsWith("data:image/")
   );
 }

@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import {
   ChatContentBlock,
   fileToContentBlock,
+  isImageContentBlock,
   isSupportedTextFile,
   isSupportedUploadFile,
   isTextContentBlock,
@@ -10,9 +11,15 @@ import {
 
 interface UseFileUploadOptions {
   initialBlocks?: ChatContentBlock[];
+  allowImages?: boolean;
+  resetKey?: string | null;
 }
 
-function isDuplicateFile(file: File, blocks: ChatContentBlock[]) {
+function isDuplicateFile(
+  file: File,
+  blocks: ChatContentBlock[],
+  allowImages: boolean,
+) {
   if (file.type === "application/pdf") {
     return blocks.some(
       (block) =>
@@ -29,7 +36,7 @@ function isDuplicateFile(file: File, blocks: ChatContentBlock[]) {
           block.metadata?.name === file.name),
     );
   }
-  if (isSupportedUploadFile(file)) {
+  if (isSupportedUploadFile(file, allowImages)) {
     return blocks.some(
       (block) =>
         block.type === "image" &&
@@ -40,30 +47,48 @@ function isDuplicateFile(file: File, blocks: ChatContentBlock[]) {
   return false;
 }
 
-function classifyFiles(files: File[], blocks: ChatContentBlock[]) {
-  const validFiles = files.filter(isSupportedUploadFile);
+function classifyFiles(
+  files: File[],
+  blocks: ChatContentBlock[],
+  allowImages: boolean,
+) {
+  const validFiles = files.filter((file) =>
+    isSupportedUploadFile(file, allowImages),
+  );
   return {
-    invalidFiles: files.filter((file) => !isSupportedUploadFile(file)),
-    duplicateFiles: validFiles.filter((file) => isDuplicateFile(file, blocks)),
-    uniqueFiles: validFiles.filter((file) => !isDuplicateFile(file, blocks)),
+    invalidFiles: files.filter(
+      (file) => !isSupportedUploadFile(file, allowImages),
+    ),
+    duplicateFiles: validFiles.filter((file) =>
+      isDuplicateFile(file, blocks, allowImages),
+    ),
+    uniqueFiles: validFiles.filter(
+      (file) => !isDuplicateFile(file, blocks, allowImages),
+    ),
   };
 }
 
 export function useFileUpload({
   initialBlocks = [],
+  allowImages = false,
+  resetKey,
 }: UseFileUploadOptions = {}) {
   const [contentBlocks, setContentBlocks] =
     useState<ChatContentBlock[]>(initialBlocks);
   const dropRef = useRef<HTMLDivElement>(null);
   const [dragOver, setDragOver] = useState(false);
   const dragCounter = useRef(0);
+  const uploadGeneration = useRef(0);
+  const previousResetKey = useRef(resetKey);
 
   const addFiles = useCallback(
     async (files: File[], invalidFileMessage: string) => {
       if (!files.length) return;
+      const generation = uploadGeneration.current;
       const { invalidFiles, duplicateFiles, uniqueFiles } = classifyFiles(
         files,
         contentBlocks,
+        allowImages,
       );
 
       if (invalidFiles.length > 0) {
@@ -76,13 +101,38 @@ export function useFileUpload({
       }
       if (uniqueFiles.length > 0) {
         const newBlocks = await Promise.all(
-          uniqueFiles.map(fileToContentBlock),
+          uniqueFiles.map((file) => fileToContentBlock(file, allowImages)),
         );
+        if (generation !== uploadGeneration.current) return;
         setContentBlocks((prev) => [...prev, ...newBlocks]);
       }
     },
-    [contentBlocks],
+    [allowImages, contentBlocks],
   );
+
+  useEffect(() => {
+    uploadGeneration.current += 1;
+  }, [allowImages]);
+
+  useEffect(() => {
+    if (Object.is(previousResetKey.current, resetKey)) return;
+    previousResetKey.current = resetKey;
+    uploadGeneration.current += 1;
+    setContentBlocks([]);
+  }, [resetKey]);
+
+  useEffect(() => {
+    if (
+      allowImages ||
+      !contentBlocks.some((block) => isImageContentBlock(block))
+    ) {
+      return;
+    }
+    setContentBlocks((blocks) =>
+      blocks.filter((block) => !isImageContentBlock(block)),
+    );
+    toast.error("当前模型不支持图片，已移除待发送的图片附件。");
+  }, [allowImages, contentBlocks]);
 
   const handleFileUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     await addFiles(
@@ -179,7 +229,10 @@ export function useFileUpload({
     setContentBlocks((prev) => prev.filter((_, i) => i !== idx));
   };
 
-  const resetBlocks = () => setContentBlocks([]);
+  const resetBlocks = () => {
+    uploadGeneration.current += 1;
+    setContentBlocks([]);
+  };
 
   /**
    * Handle paste event for files (images, PDFs)

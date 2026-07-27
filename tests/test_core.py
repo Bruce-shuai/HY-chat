@@ -612,6 +612,85 @@ def test_text_models_replace_openai_and_legacy_image_blocks():
     assert "legacy.jpg" in message.content[1]["text"]
 
 
+def test_text_models_replace_additional_provider_image_block_formats():
+    [message] = _normalize_multimodal_messages(
+        [
+            HumanMessage(
+                content=[
+                    {
+                        "type": "input_image",
+                        "image_url": "data:image/png;base64,abc",
+                    },
+                    {
+                        "type": "media",
+                        "media_type": "image/webp",
+                        "data": "def",
+                    },
+                    {
+                        "type": "file",
+                        "media_type": "image/jpeg",
+                        "data": "ghi",
+                        "name": "camera.jpg",
+                    },
+                    {
+                        "type": "media",
+                        "source": {
+                            "type": "base64",
+                            "media_type": "image/png",
+                            "data": "jkl",
+                        },
+                    },
+                    {
+                        "type": "file",
+                        "file": {
+                            "filename": "nested.png",
+                            "file_data": "data:IMAGE/PNG;base64,mno",
+                        },
+                    },
+                    {
+                        "type": "media",
+                        "media_type": " IMAGE/PNG ",
+                        "data": "pqr",
+                    },
+                ]
+            )
+        ],
+        supports_images=False,
+    )
+
+    assert [block["type"] for block in message.content] == ["text"] * 6
+    assert all(
+        "image_url" not in block and "data" not in block for block in message.content
+    )
+    assert "camera.jpg" in message.content[2]["text"]
+    assert "nested.png" in message.content[4]["text"]
+
+
+def test_text_blocks_with_image_url_metadata_are_not_misclassified_as_images():
+    [message] = _normalize_multimodal_messages(
+        [
+            HumanMessage(
+                content=[
+                    {
+                        "type": "text",
+                        "text": "图片链接仅用于业务展示",
+                        "image_url": None,
+                    }
+                ]
+            )
+        ],
+        supports_images=False,
+    )
+
+    assert message.content == [
+        {
+            "type": "text",
+            "text": "图片链接仅用于业务展示",
+            "image_url": None,
+        }
+    ]
+
+
 def test_frontend_pdf_blocks_are_converted_to_text_for_chat_models():
     output = BytesIO()
     writer = PdfWriter()

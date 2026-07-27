@@ -27,7 +27,10 @@ import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { Label } from "../ui/label";
 import { Switch } from "../ui/switch";
 import { useFileUpload } from "@/hooks/use-file-upload";
-import { UPLOAD_ATTACHMENT_ACCEPT } from "@/lib/multimodal-utils";
+import {
+  buildUploadAttachmentAccept,
+  isImageContentBlock,
+} from "@/lib/multimodal-utils";
 import { backendUrl } from "@/lib/backend-url";
 import { ContentBlocksPreview } from "./ContentBlocksPreview";
 import { AccountMenu } from "@/components/auth/AccountMenu";
@@ -105,9 +108,17 @@ export function Thread() {
   const showToolCalls = !(hideToolCalls ?? true);
   const [input, setInput] = useState("");
   const [models, setModels] = useState<
-    Array<{ id: string; label: string; is_default: boolean }>
+    Array<{
+      id: string;
+      label: string;
+      is_default: boolean;
+      supports_images: boolean;
+    }>
   >([]);
   const [selectedModel, setSelectedModel] = useState("");
+  const selectedModelSupportsImages =
+    models.find((model) => model.id === selectedModel)?.supports_images ??
+    false;
   const [knowledgeUploading, setKnowledgeUploading] = useState(false);
   const knowledgeInputRef = useRef<HTMLInputElement>(null);
   const footerRef = useRef<HTMLDivElement>(null);
@@ -118,10 +129,13 @@ export function Thread() {
     handleFileUpload,
     dropRef,
     removeBlock,
-    resetBlocks: _resetBlocks,
+    resetBlocks,
     dragOver,
     handlePaste,
-  } = useFileUpload();
+  } = useFileUpload({
+    allowImages: selectedModelSupportsImages,
+    resetKey: threadId,
+  });
   const isLargeScreen = useMediaQuery("(min-width: 1024px)");
 
   const stream = useStreamContext();
@@ -282,6 +296,16 @@ export function Thread() {
       isThreadLoading
     )
       return;
+    if (
+      !selectedModelSupportsImages &&
+      contentBlocks.some((block) => isImageContentBlock(block))
+    ) {
+      setContentBlocks((blocks) =>
+        blocks.filter((block) => !isImageContentBlock(block)),
+      );
+      toast.error("当前模型不支持图片，图片未发送。请改用文字描述。");
+      return;
+    }
     waitForFirstToken();
 
     const newHumanMessage = new HumanMessageClass({
@@ -304,7 +328,7 @@ export function Thread() {
     });
 
     setInput("");
-    setContentBlocks([]);
+    resetBlocks();
   };
 
   const handleRegenerate = (parentCheckpointId: string | undefined) => {
@@ -603,7 +627,9 @@ export function Thread() {
                           type="file"
                           onChange={handleFileUpload}
                           multiple
-                          accept={UPLOAD_ATTACHMENT_ACCEPT}
+                          accept={buildUploadAttachmentAccept(
+                            selectedModelSupportsImages,
+                          )}
                           className="hidden"
                         />
                         <button
