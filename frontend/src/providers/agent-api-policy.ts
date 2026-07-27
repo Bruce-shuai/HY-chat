@@ -1,4 +1,5 @@
 export const PRODUCTION_AGENT_API_PATH = "/api";
+export const PRODUCTION_AGENT_ASSISTANT_ID = "hy-chat";
 
 type AgentApiPolicyOptions = {
   nodeEnv?: string;
@@ -31,6 +32,20 @@ export function selectAgentApiUrl(
 ): string {
   if (isAgentApiLocked(options)) return PRODUCTION_AGENT_API_PATH;
   return queryApiUrl?.trim() || environmentApiUrl?.trim() || "";
+}
+
+/**
+ * Production serves a single, application-owned graph. Keeping its identifier
+ * here makes the browser independent of optional build-time public variables
+ * and prevents URL parameters from selecting a different graph.
+ */
+export function selectAgentAssistantId(
+  queryAssistantId: string | null | undefined,
+  environmentAssistantId: string | undefined,
+  options: AgentApiPolicyOptions = {},
+): string {
+  if (isAgentApiLocked(options)) return PRODUCTION_AGENT_ASSISTANT_ID;
+  return queryAssistantId?.trim() || environmentAssistantId?.trim() || "";
 }
 
 export function resolveApiUrl(

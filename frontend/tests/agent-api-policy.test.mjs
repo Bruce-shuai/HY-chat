@@ -26,6 +26,21 @@ test("production ignores query and environment Agent API overrides", () => {
   );
 });
 
+test("production always selects the application-owned assistant", () => {
+  assert.equal(
+    policy.selectAgentAssistantId(
+      "attacker-controlled-graph",
+      "misconfigured-graph",
+      production,
+    ),
+    "hy-chat",
+  );
+  assert.equal(
+    policy.selectAgentAssistantId(undefined, undefined, production),
+    "hy-chat",
+  );
+});
+
 test("production only attaches a user Bearer token to same-origin /api", () => {
   assert.deepEqual(
     policy.userBearerHeaders(
@@ -69,5 +84,25 @@ test("development keeps explicit graph-server configuration", () => {
       development,
     ),
     { Authorization: "Bearer development-token" },
+  );
+  assert.equal(
+    policy.selectAgentAssistantId(
+      "query-assistant",
+      "environment-assistant",
+      development,
+    ),
+    "query-assistant",
+  );
+  assert.equal(
+    policy.selectAgentAssistantId(
+      undefined,
+      "environment-assistant",
+      development,
+    ),
+    "environment-assistant",
+  );
+  assert.equal(
+    policy.selectAgentAssistantId(undefined, undefined, development),
+    "",
   );
 });

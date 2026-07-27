@@ -15,7 +15,7 @@ import {
 } from "react";
 import { createClient } from "./client";
 import { useAuth } from "./Auth";
-import { selectAgentApiUrl } from "./agent-api-policy";
+import { selectAgentApiUrl, selectAgentAssistantId } from "./agent-api-policy";
 
 type ConversationSummary = {
   thread_id: string;
@@ -116,6 +116,10 @@ export function ThreadProvider({ children }: { children: ReactNode }) {
     defaultValue: envAuthScheme || "",
   });
   const selectedApiUrl = selectAgentApiUrl(apiUrl, envApiUrl);
+  const selectedAssistantId = selectAgentAssistantId(
+    assistantId,
+    envAssistantId,
+  );
   const [threads, setThreads] = useState<Thread[]>([]);
   const [threadsLoading, setThreadsLoading] = useState(false);
   const [deletedThreadIds, setDeletedThreadIds] = useState<Set<string>>(() =>
@@ -136,13 +140,12 @@ export function ThreadProvider({ children }: { children: ReactNode }) {
   }, [selectedApiUrl, authScheme, accessToken]);
 
   const getThreads = useCallback(async (): Promise<Thread[]> => {
-    const resolvedAssistantId = assistantId || envAssistantId;
-    if (!selectedApiUrl || !resolvedAssistantId) return [];
+    if (!selectedApiUrl || !selectedAssistantId) return [];
     const client = getClient();
 
     const graphThreads = await client.threads.search({
       metadata: {
-        ...getThreadSearchMetadata(resolvedAssistantId),
+        ...getThreadSearchMetadata(selectedAssistantId),
       },
       limit: 100,
     });
@@ -171,8 +174,7 @@ export function ThreadProvider({ children }: { children: ReactNode }) {
     }
   }, [
     selectedApiUrl,
-    assistantId,
-    envAssistantId,
+    selectedAssistantId,
     getClient,
     deletedThreadIds,
     authFetch,

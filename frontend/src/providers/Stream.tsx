@@ -25,7 +25,12 @@ import { useThreads } from "./Thread";
 import { toast } from "sonner";
 import { useAuth } from "./Auth";
 import { resolveApiUrl } from "./client";
-import { selectAgentApiUrl, userBearerHeaders } from "./agent-api-policy";
+import {
+  PRODUCTION_AGENT_ASSISTANT_ID,
+  selectAgentApiUrl,
+  selectAgentAssistantId,
+  userBearerHeaders,
+} from "./agent-api-policy";
 import {
   AgentRunTimeoutError,
   AgentRunWatchdog,
@@ -575,7 +580,7 @@ const StreamSession = ({
 
 // Default values for the form
 const DEFAULT_API_URL = "/api";
-const DEFAULT_ASSISTANT_ID = "hy-chat";
+const DEFAULT_ASSISTANT_ID = PRODUCTION_AGENT_ASSISTANT_ID;
 const AGENT_BUILDER_AUTH_SCHEME = "langsmith-api-key";
 
 function buildStreamSessionKey({
@@ -638,9 +643,9 @@ export const StreamProvider: React.FC<{ children: ReactNode }> = ({
     _setApiKey(key);
   };
 
-  // Production ignores apiUrl query parameters and always uses same-origin /api.
+  // Production ignores URL overrides and always uses the application-owned graph.
   const finalApiUrl = selectAgentApiUrl(apiUrl, envApiUrl);
-  const finalAssistantId = assistantId || envAssistantId;
+  const finalAssistantId = selectAgentAssistantId(assistantId, envAssistantId);
   const finalAuthScheme = authScheme || envAuthScheme || "";
   const streamSessionKey = buildStreamSessionKey({
     apiUrl: finalApiUrl,
