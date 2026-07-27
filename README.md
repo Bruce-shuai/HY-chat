@@ -128,9 +128,9 @@ curl -X POST http://localhost:8000/auth/register \
 - 可调用模型列表
 - 每分钟模型请求次数
 - 每月 Token 配额
-- 是否允许 Web Search、Stock 等高成本工具
+- 是否允许股票行情查询等由服务端标记为高成本的工具
 
-这些策略由 Agent Server 的模型/工具中间件执行，不依赖前端按钮是否显示。Redis 用于原子 RPM 计数；模型和 Token 权限仍由数据库强制执行，Redis 暂时不可用时聊天不会整体中断。
+当前高成本工具仅包含股票行情查询，网页搜索不受该开关控制。这些策略由 Agent Server 的模型/工具中间件执行，不依赖前端按钮是否显示。Redis 用于原子 RPM 计数；模型和 Token 权限仍由数据库强制执行，Redis 暂时不可用时聊天不会整体中断。
 
 ## 会话与 Trace
 

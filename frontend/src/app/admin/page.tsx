@@ -7,6 +7,7 @@ import {
   AlertCircle,
   ArrowLeft,
   CheckCircle2,
+  CircleDollarSign,
   Files,
   MessageSquare,
   Shield,
@@ -34,6 +35,9 @@ type RowFeedback = {
   type: "success" | "error";
   text: string;
 };
+
+// Keep this description aligned with HIGH_COST_TOOLS in app/policies/service.py.
+const HIGH_COST_TOOL_NAME = "股票行情查询";
 
 function getResponseMessage(detail: unknown, fallback: string) {
   return typeof detail === "string" && detail.trim() ? detail : fallback;
@@ -264,6 +268,33 @@ function AdminContent() {
             <span className="text-muted-foreground text-sm">{message}</span>
           )}
         </div>
+        <aside
+          className="bg-muted/40 mt-3 flex items-start gap-3 rounded-xl border p-4"
+          aria-labelledby="high-cost-tools-title"
+        >
+          <span className="bg-background flex size-9 shrink-0 items-center justify-center rounded-lg border">
+            <CircleDollarSign
+              className="text-muted-foreground size-5"
+              aria-hidden="true"
+            />
+          </span>
+          <div className="min-w-0">
+            <h3
+              id="high-cost-tools-title"
+              className="text-sm font-medium"
+            >
+              高成本工具包含哪些功能？
+            </h3>
+            <p className="mt-1 text-sm">
+              当前仅包含 1 项：
+              <span className="font-medium">{HIGH_COST_TOOL_NAME}</span>
+              （股票、ETF 和常见指数报价）。
+            </p>
+            <p className="text-muted-foreground mt-1 text-xs leading-5">
+              此功能会调用外部行情服务，可能消耗第三方服务额度。关闭后只会拦截股票行情查询；普通聊天、网页搜索、天气查询和图片生成不受影响。
+            </p>
+          </div>
+        </aside>
         <section className="mt-3 space-y-3">
           {users.map((item) => {
             const feedback = rowFeedback[item.id];
@@ -331,26 +362,41 @@ function AdminContent() {
                     />
                   </label>
                 </div>
-                <div className="mt-4 flex flex-col gap-4 text-sm sm:flex-row sm:flex-wrap sm:items-center">
-                  <label>
+                <div className="mt-4 flex flex-col gap-3 text-sm lg:flex-row lg:items-center">
+                  <label className="flex items-center gap-2">
                     <input
                       name="is_active"
                       type="checkbox"
                       defaultChecked={item.is_active}
-                      className="mr-2"
+                      className="size-4 shrink-0"
                     />
                     账号启用
                   </label>
-                  <label>
+                  <div className="bg-muted/30 flex min-w-0 items-start gap-2 rounded-lg border px-3 py-2.5 lg:max-w-sm lg:flex-1">
                     <input
+                      id={`high-cost-${item.id}`}
                       name="high_cost"
                       type="checkbox"
                       defaultChecked={item.policy.allow_high_cost_tools}
-                      className="mr-2"
+                      aria-describedby={`high-cost-description-${item.id}`}
+                      className="mt-0.5 size-4 shrink-0"
                     />
-                    高成本工具
-                  </label>
-                  <div className="flex w-full flex-col gap-2 sm:ml-auto sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+                    <label
+                      htmlFor={`high-cost-${item.id}`}
+                      className="min-w-0 cursor-pointer"
+                    >
+                      <span className="block font-medium">
+                        允许使用高成本工具
+                      </span>
+                      <span
+                        id={`high-cost-description-${item.id}`}
+                        className="text-muted-foreground mt-0.5 block text-xs"
+                      >
+                        当前包含：{HIGH_COST_TOOL_NAME}
+                      </span>
+                    </label>
+                  </div>
+                  <div className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end lg:ml-auto lg:w-auto">
                     {feedback && (
                       <span
                         className={
