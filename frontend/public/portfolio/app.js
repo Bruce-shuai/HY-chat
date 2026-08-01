@@ -28,7 +28,7 @@
   ];
 
   const WORLD_TRAVEL = 5400;
-  const CHARACTER_STEP_MS = 150;
+  const CHARACTER_STEP_MS = 115;
   const POSES = [
     { id: "intro", end: 0.13 },
     { id: "work", end: 0.39 },
