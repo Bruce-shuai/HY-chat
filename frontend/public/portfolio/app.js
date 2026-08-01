@@ -28,7 +28,7 @@
   ];
 
   const WORLD_TRAVEL = 5400;
-  const CHARACTER_STEP_MS = 72;
+  const CHARACTER_FRAME_DISTANCE = 18;
   const POSES = [
     { id: "intro", end: 0.13 },
     { id: "work", end: 0.39 },
@@ -48,7 +48,8 @@
   let lastTime = 0;
   let lastDraw = 0;
   let lastScrollAt = performance.now();
-  let lastCharacterStepAt = performance.now();
+  let lastCharacterProgress = 0;
+  let characterTravelDistance = 0;
   let characterWalkFrame = 0;
   let lastTextProgress = Number.NaN;
   let drawTextThisFrame = true;
@@ -154,11 +155,15 @@
   function loadFrame(frame) {
     if (!frame) return Promise.resolve(null);
     if (!frame.getAttribute("src") && frame.dataset.src) frame.src = frame.dataset.src;
-    if (frame.complete && frame.naturalWidth) return Promise.resolve(frame);
+    const decode = () => {
+      if (typeof frame.decode !== "function") return Promise.resolve(frame);
+      return frame.decode().catch(() => undefined).then(() => frame);
+    };
+    if (frame.complete && frame.naturalWidth) return decode();
     return new Promise(resolve => {
-      const finish = () => resolve(frame);
+      const finish = () => decode().then(resolve);
       frame.addEventListener("load", finish, { once: true });
-      frame.addEventListener("error", finish, { once: true });
+      frame.addEventListener("error", () => resolve(frame), { once: true });
     });
   }
 
@@ -173,7 +178,7 @@
       Promise.all(motionFrames.map(loadFrame)).then(loadedFrames => {
         if (loadedFrames.every(frame => frame?.naturalWidth)) {
           sprite.classList.add("has-motion-frame");
-          if (sprite.dataset.pose === activePose) updateCharacter(targetProgress);
+          if (sprite.dataset.pose === activePose) updateCharacter(renderProgress);
         }
       });
     }
@@ -207,14 +212,16 @@
     const isWalking = !reduceMotion && (
       time - lastScrollAt < 220 || Math.abs(targetProgress - renderProgress) > 0.00002
     );
-    if (isWalking && time - lastCharacterStepAt >= CHARACTER_STEP_MS) {
-      characterWalkFrame = (characterWalkFrame + 1) % activeFrameCount;
-      lastCharacterStepAt = time;
-    } else if (!isWalking) {
-      characterWalkFrame = 0;
-      lastCharacterStepAt = time;
+    const progressDelta = Math.abs(progress - lastCharacterProgress);
+    if (!reduceMotion && Number.isFinite(progressDelta) && progressDelta < 0.12) {
+      characterTravelDistance += progressDelta * WORLD_TRAVEL;
     }
-    const requestedFrame = isWalking ? characterWalkFrame % activeFrameCount : 0;
+    lastCharacterProgress = progress;
+
+    if (isWalking) {
+      characterWalkFrame = Math.floor(characterTravelDistance / CHARACTER_FRAME_DISTANCE);
+    }
+    const requestedFrame = reduceMotion ? 0 : characterWalkFrame % activeFrameCount;
 
     poseSprites.forEach(sprite => {
       const isActive = sprite.dataset.pose === activePose;
