@@ -1,6 +1,6 @@
-# HY-chat UI
+# HY-Agent UI
 
-HY-chat 的聊天前端，基于 LangChain 官方开源 [Agent Chat UI](https://github.com/langchain-ai/agent-chat-ui) 定制。
+HY-Agent 的聊天前端，基于 LangChain 官方开源 [Agent Chat UI](https://github.com/langchain-ai/agent-chat-ui) 定制。
 
 在项目根目录运行 `docker compose up --build` 可同时启动前端与 LangGraph Agent Server。
 本地开发时，将 `.env.example` 复制为 `.env.local`，然后运行 `pnpm install && pnpm dev`。

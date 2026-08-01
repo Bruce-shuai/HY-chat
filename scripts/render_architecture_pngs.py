@@ -140,7 +140,7 @@ def render_frontend() -> Path:
     width, height = 2000, 1350
     image = Image.new("RGB", (width, height), BG)
     draw = ImageDraw.Draw(image)
-    heading(draw, "HY-chat 前端架构", "Next.js App Router + React Providers + LangGraph SDK", width)
+    heading(draw, "HY-Agent 前端架构", "Next.js App Router + React Providers + LangGraph SDK", width)
 
     section(draw, (60, 145, 1940, 360), "① 页面与路由层", BLUE)
     pages = [
@@ -201,7 +201,7 @@ def render_backend() -> Path:
     width, height = 2100, 1480
     image = Image.new("RGB", (width, height), BG)
     draw = ImageDraw.Draw(image)
-    heading(draw, "HY-chat 后端架构", "FastAPI 控制面 + LangGraph 执行面 + 统一策略、工具与数据层", width)
+    heading(draw, "HY-Agent 后端架构", "FastAPI 控制面 + LangGraph 执行面 + 统一策略、工具与数据层", width)
 
     section(draw, (60, 145, 2040, 345), "① 接入层", BLUE)
     ingress = [

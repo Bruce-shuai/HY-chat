@@ -610,7 +610,7 @@ wheels = [
 ]
 
 [[package]]
-name = "hy-chat"
+name = "hy-agent"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [

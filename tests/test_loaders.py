@@ -17,7 +17,7 @@ def test_common_document_loaders(tmp_path):
     )
 
     with (tmp_path / "sample.csv").open("w", newline="") as file:
-        csv.writer(file).writerows([["name", "value"], ["HY-chat", "RAG"]])
+        csv.writer(file).writerows([["name", "value"], ["HY-Agent", "RAG"]])
 
     document = Document()
     document.add_paragraph("Word document")

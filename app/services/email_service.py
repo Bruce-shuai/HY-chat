@@ -36,13 +36,13 @@ def send_password_reset_email(
     message = EmailMessage()
     message["From"] = settings.smtp_from_email
     message["To"] = to_email
-    message["Subject"] = "HY-chat 密码重置"
+    message["Subject"] = "HY-Agent 密码重置"
     message.set_content(
         "\n".join(
             [
                 f"{display_name}，你好：",
                 "",
-                "我们收到了你的 HY-chat 密码找回请求。",
+                "我们收到了你的 HY-Agent 密码找回请求。",
                 f"请在 {settings.password_reset_token_minutes} 分钟内打开下面的链接重置密码：",
                 reset_url,
                 "",

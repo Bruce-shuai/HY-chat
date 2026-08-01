@@ -665,10 +665,10 @@ export const StreamProvider: React.FC<{ children: ReactNode }> = ({
                 className="size-9 border"
                 priority
               />
-              <h1 className="text-xl font-semibold tracking-tight">HY-chat</h1>
+              <h1 className="text-xl font-semibold tracking-tight">HY-Agent</h1>
             </div>
             <p className="text-muted-foreground">
-              欢迎使用 HY-chat。开始前，请填写图服务地址与图标识。
+              欢迎使用 HY-Agent。开始前，请填写图服务地址与图标识。
             </p>
           </div>
           <form

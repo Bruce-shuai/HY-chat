@@ -117,7 +117,7 @@ export function LoginScreen() {
           <div className="flex items-center">
             <BrandLogo
               variant="wordmark"
-              className="h-20 w-24 shadow-lg"
+              className="text-white"
               priority
             />
           </div>
@@ -135,7 +135,7 @@ export function LoginScreen() {
             <div className="flex items-center">
               <BrandLogo
                 variant="wordmark"
-                className="h-20 w-24 border shadow-sm"
+                className="text-foreground"
                 priority
               />
             </div>

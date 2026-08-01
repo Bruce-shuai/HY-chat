@@ -47,7 +47,7 @@ def state_db():
 def _tool_call(
     *,
     call_id: str = "call-1",
-    query: str = "HY-chat",
+    query: str = "HY-Agent",
 ) -> dict[str, object]:
     return {
         "id": call_id,
@@ -60,7 +60,7 @@ def _tool_call(
 def _approval_decision(
     decision_type: str,
     *,
-    query: str = "HY-chat",
+    query: str = "HY-Agent",
     effective_query: str | None = None,
 ) -> ApprovalDecision:
     effective_query = effective_query or query
@@ -229,7 +229,7 @@ def test_completed_invocation_reuses_result_without_second_claim(state_db):
             runtime_run_id="run-1",
             tool_call_id="call-1",
             tool_name="web_search",
-            requested_input={"query": "HY-chat"},
+            requested_input={"query": "HY-Agent"},
         )
         complete_tool_invocation(
             db,
@@ -250,7 +250,7 @@ def test_completed_invocation_reuses_result_without_second_claim(state_db):
             runtime_run_id="run-retry",
             tool_call_id="call-1",
             tool_name="web_search",
-            requested_input={"query": "HY-chat"},
+            requested_input={"query": "HY-Agent"},
         )
         invocation = db.get(ToolInvocation, claim.invocation_id)
 
@@ -279,7 +279,7 @@ def test_same_approval_resume_is_valid_after_tool_completed(state_db):
             runtime_run_id="run-execute",
             tool_call_id="call-1",
             tool_name="web_search",
-            requested_input={"query": "HY-chat"},
+            requested_input={"query": "HY-Agent"},
         )
         complete_tool_invocation(
             db,
@@ -333,7 +333,7 @@ def test_concurrent_claim_allows_only_one_executor(tmp_path):
                 runtime_run_id=run_id,
                 tool_call_id="call-1",
                 tool_name="web_search",
-                requested_input={"query": "HY-chat"},
+                requested_input={"query": "HY-Agent"},
             ).should_execute
 
     try:

@@ -71,7 +71,7 @@ def test_workspace_tools_are_admin_only_in_policy_middleware(tool_name):
 
 def test_high_cost_tool_policy_error_is_explicit():
     policy = SimpleNamespace(
-        quota_reset_at=datetime(2026, 8, 1),
+        quota_reset_at=datetime(2099, 1, 1),
         tokens_used=0,
         allow_high_cost_tools=False,
     )

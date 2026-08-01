@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.7
 FROM public.ecr.aws/docker/library/node:22-alpine AS dependencies
 
 WORKDIR /app
@@ -6,7 +7,9 @@ ENV COREPACK_NPM_REGISTRY=${NPM_REGISTRY} \
     npm_config_registry=${NPM_REGISTRY}
 RUN corepack enable
 COPY frontend/package.json frontend/pnpm-lock.yaml ./
-RUN pnpm config set registry "${NPM_REGISTRY}" \
+RUN --mount=type=cache,id=hy-agent-pnpm-store,target=/pnpm/store \
+    pnpm config set store-dir /pnpm/store \
+    && pnpm config set registry "${NPM_REGISTRY}" \
     && pnpm install --frozen-lockfile
 
 FROM public.ecr.aws/docker/library/node:22-alpine AS builder

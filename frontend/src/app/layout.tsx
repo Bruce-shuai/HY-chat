@@ -1,23 +1,16 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { Inter } from "next/font/google";
 import React from "react";
 import { NuqsAdapter } from "nuqs/adapters/next/app";
 import { AuthProvider } from "@/providers/Auth";
 import { ThemeProvider } from "@/providers/Theme";
 
-const inter = Inter({
-  subsets: ["latin"],
-  preload: true,
-  display: "swap",
-});
-
 export const metadata: Metadata = {
-  title: "HY-chat",
-  description: "HY-chat 智能助手工作台",
+  title: "HY-Agent",
+  description: "HY-Agent 智能助手工作台",
   icons: {
-    icon: "/hy-chat-logo.png",
-    apple: "/hy-chat-logo.png",
+    icon: "/icon.png",
+    apple: "/icon.png",
   },
 };
 
@@ -31,7 +24,7 @@ export default function RootLayout({
       lang="zh-CN"
       suppressHydrationWarning
     >
-      <body className={inter.className}>
+      <body>
         <ThemeProvider
           attribute="class"
           defaultTheme="system"

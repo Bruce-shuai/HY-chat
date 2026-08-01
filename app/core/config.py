@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     app_env: str = Field(default="local", alias="APP_ENV")
-    app_name: str = Field(default="HY-chat", alias="APP_NAME")
+    app_name: str = Field(default="HY-Agent", alias="APP_NAME")
     app_port: int = Field(default=8000, alias="APP_PORT")
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
 

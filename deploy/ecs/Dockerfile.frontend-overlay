@@ -1,0 +1,13 @@
+ARG BASE_IMAGE=hy-chat-frontend:latest
+FROM ${BASE_IMAGE}
+
+USER root
+RUN rm -rf /app/.next /app/public /app/server.js /app/package.json
+
+COPY --chown=nextjs:nodejs standalone/ /app/
+COPY --chown=nextjs:nodejs static/ /app/.next/static/
+COPY --chown=nextjs:nodejs public/ /app/public/
+RUN test -f /app/server.js \
+    && grep -Rqs '"/backend"' /app/.next/static/chunks
+
+USER nextjs

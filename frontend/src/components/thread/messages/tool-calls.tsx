@@ -34,7 +34,7 @@ export function ToolCalls({
     <div className="mx-auto grid max-w-3xl grid-rows-[1fr_auto] gap-2">
       {waitingForApproval && (
         <p className="text-muted-foreground bg-muted/30 rounded-lg border px-3 py-2 text-sm">
-          这个工具调用正在等待人工确认。请在上方审批面板点击“批准”，HY-chat
+          这个工具调用正在等待人工确认。请在上方审批面板点击“批准”，HY-Agent
           才会执行工具并继续回答。
         </p>
       )}

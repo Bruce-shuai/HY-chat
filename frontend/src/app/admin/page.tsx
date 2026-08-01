@@ -244,7 +244,7 @@ function AdminContent() {
           </Link>
           <Shield className="size-5 shrink-0" />
           <h1 className="min-w-0 flex-1 truncate font-semibold">
-            HY-chat 后台管理
+            HY-Agent 后台管理
           </h1>
           <AccountMenu />
         </div>

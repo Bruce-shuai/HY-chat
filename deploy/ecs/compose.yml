@@ -34,7 +34,7 @@ services:
       SERVICE_ROLE: api
       PORT: "8000"
       APP_ENV: production
-      APP_NAME: HY-chat
+      APP_NAME: HY-Agent
       DATABASE_URL: postgresql+psycopg://hy_chat:${POSTGRES_PASSWORD}@postgres:5432/hy_chat_db
       DATABASE_CONNECT_TIMEOUT_SECONDS: ${DATABASE_CONNECT_TIMEOUT_SECONDS:-10}
       DATABASE_POOL_TIMEOUT_SECONDS: ${DATABASE_POOL_TIMEOUT_SECONDS:-10}

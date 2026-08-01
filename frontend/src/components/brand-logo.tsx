@@ -14,37 +14,36 @@ export function BrandLogo({
   return (
     <span
       className={cn(
-        "relative inline-block shrink-0 overflow-hidden bg-white",
+        "shrink-0",
         variant === "mark"
-          ? "size-8 rounded-sm"
-          : "h-28 w-32 rounded-2xl",
+          ? "relative inline-block size-8 overflow-hidden rounded-sm bg-white"
+          : "inline-flex items-center gap-3",
         className,
       )}
       role="img"
-      aria-label="HY-chat"
+      aria-label="HY-Agent"
     >
-      {variant === "mark" ? (
-        <svg
-          viewBox="372 275 510 510"
-          className="size-full select-none"
+      <img
+        src="/hy-agent-mark.webp"
+        alt=""
+        aria-hidden="true"
+        loading={priority ? "eager" : "lazy"}
+        fetchPriority={priority ? "high" : "auto"}
+        width={256}
+        height={256}
+        className={cn(
+          "object-contain select-none",
+          variant === "mark" ? "size-full" : "size-12 rounded-xl bg-white",
+        )}
+      />
+      {variant === "wordmark" ? (
+        <span
           aria-hidden="true"
+          className="text-2xl font-semibold tracking-tight whitespace-nowrap"
         >
-          <image
-            href="/hy-chat-logo.png"
-            width="1254"
-            height="1254"
-          />
-        </svg>
-      ) : (
-        <img
-          src="/hy-chat-logo.png"
-          alt=""
-          aria-hidden="true"
-          loading={priority ? "eager" : "lazy"}
-          fetchPriority={priority ? "high" : "auto"}
-          className="absolute top-1/2 left-1/2 h-auto w-[155%] max-w-none -translate-x-1/2 -translate-y-1/2 select-none"
-        />
-      )}
+          HY-Agent
+        </span>
+      ) : null}
     </span>
   );
 }

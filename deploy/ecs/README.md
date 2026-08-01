@@ -96,5 +96,19 @@ the `Build frontend deployment image` GitHub workflow for the release commit,
 download its Linux AMD64 image artifact, and load it with `docker load` before
 recreating the frontend service.
 
+For frontend-only changes with an unchanged `frontend/pnpm-lock.yaml`, create a
+small architecture-neutral overlay instead of uploading the complete Node image:
+
+```bash
+./scripts/package_frontend_overlay.sh
+```
+
+The archive contains only standalone application files, static chunks, public
+assets, and `Dockerfile.frontend-overlay`; it deliberately excludes
+`node_modules`. Upload and extract it on ECS, then build a candidate with the
+current production frontend as `BASE_IMAGE`. If the lockfile checksum differs,
+use the full Linux image workflow instead—the overlay may not have newly added
+Linux dependencies.
+
 Do not commit `/opt/hy-chat/.env`; it contains production secrets. Persistent
 data lives in Docker volumes and is not removed by a normal container rebuild.

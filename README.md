@@ -1,8 +1,8 @@
-# HY-chat
+# HY-Agent
 
-HY-chat 是一个面向多用户的 AI 聊天工作台，基于 LangChain Agent Chat UI、LangGraph、FastAPI、PostgreSQL/pgvector、Redis 和 S3 兼容对象存储构建。
+HY-Agent 是一个可持续扩展的多用户 AI Agent 工作台，基于 LangChain Agent Chat UI、LangGraph、FastAPI、PostgreSQL/pgvector、Redis 和 S3 兼容对象存储构建。
 
-![HY-chat Agent Chat UI](docs/hy-chat-ui.png)
+![HY-Agent 工作台](docs/hy-chat-ui.png)
 
 第一次阅读或准备修改项目时，建议先看[代码阅读指南](docs/code-reading-guide.md)，其中说明了目录职责、两条 Agent 链路的区别，以及常见需求应该从哪个文件开始。
 

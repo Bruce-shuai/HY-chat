@@ -251,8 +251,8 @@ def test_hitl_interrupts_server_runs_and_skips_direct_runs(monkeypatch):
 
 def test_hash_embeddings_are_deterministic():
     service = EmbeddingService()
-    first = service._hash_embedding("HY-chat RAG")
-    second = service._hash_embedding("HY-chat RAG")
+    first = service._hash_embedding("HY-Agent RAG")
+    second = service._hash_embedding("HY-Agent RAG")
     assert first == second
     assert len(first) == service.dimensions
 
@@ -1409,14 +1409,14 @@ def test_image_generation_tool_returns_markdown_from_service(monkeypatch):
 
 def test_local_storage_round_trip(tmp_path, monkeypatch):
     source = tmp_path / "source.txt"
-    source.write_text("HY-chat storage", encoding="utf-8")
+    source.write_text("HY-Agent storage", encoding="utf-8")
     root = tmp_path / "objects"
     monkeypatch.setattr(storage, "backend", "local")
     monkeypatch.setattr(storage, "local_root", root)
 
     result = storage.put_path(source, "user-1", "notes.txt", "text/plain")
     stored = storage.open_local(result.object_key)
-    assert stored.read_text(encoding="utf-8") == "HY-chat storage"
+    assert stored.read_text(encoding="utf-8") == "HY-Agent storage"
     assert len(result.sha256) == 64
 
     storage.delete(result.object_key)

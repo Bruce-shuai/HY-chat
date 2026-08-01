@@ -1,5 +1,5 @@
 [project]
-name = "hy-chat"
+name = "hy-agent"
 version = "0.1.0"
 description = "An extensible AI chat platform with RAG, tool calling, dynamic model routing, SSE streaming, and Redis caching."
 readme = "README.md"

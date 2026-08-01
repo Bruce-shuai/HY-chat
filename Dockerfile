@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.7
 # FROM python:3.11-slim
 FROM public.ecr.aws/docker/library/python:3.11-slim
 
@@ -5,7 +6,6 @@ WORKDIR /app
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1 \
     PIP_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/
 
 RUN sed -ri \
@@ -16,7 +16,8 @@ RUN sed -ri \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN --mount=type=cache,id=hy-agent-pip-cache,target=/root/.cache/pip \
+    pip install -r requirements.txt
 
 COPY pyproject.toml README.md langgraph.json alembic.ini ./
 COPY migrations ./migrations

@@ -123,7 +123,7 @@ class ChatState(AgentState):
     conversation_id: NotRequired[str]
 
 
-SYSTEM_PROMPT = f"""你是 HY-chat，一个具备通用对话、知识库检索、代码分析、图片生成、联网搜索、天气查询和股票查询能力的智能助手。
+SYSTEM_PROMPT = f"""你是 HY-Agent，一个具备通用对话、知识库检索、代码分析、图片生成、联网搜索、天气查询和股票查询能力的智能助手。
 
 当前日期：{date.today().isoformat()}。
 
@@ -1409,7 +1409,7 @@ def _build_mock_graph():
             )
             response_text = (
                 "【模拟模型输出】\n\n"
-                f"当前模型：`{selected}`。HY-chat 的聊天链路已连接成功。配置真实模型密钥后即可"
+                f"当前模型：`{selected}`。HY-Agent 的聊天链路已连接成功。配置真实模型密钥后即可"
                 "使用真实模型、工具调用与知识库检索回答。"
                 f"{memory_text}\n\n"
                 f"你刚才发送的是：{content}"

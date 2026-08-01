@@ -1,11 +1,11 @@
-# HY-chat 代码阅读指南
+# HY-Agent 代码阅读指南
 
 这份文档回答三个问题：项目分成哪些部分、一次请求如何流转、修改某个功能应该从哪里开始。
 
 ## 1. 先建立整体印象
 
 ```text
-HY-chat/
+HY-Agent/
 ├── app/                    # Python 后端
 │   ├── api/routers/        # FastAPI HTTP 接口：解析请求、调用领域服务
 │   ├── agents/             # LangGraph 对话图；coding/ 存放 Coding Agent 工作流

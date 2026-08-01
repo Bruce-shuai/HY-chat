@@ -2,7 +2,7 @@
   <root>
     <mxCell id="0"/>
     <mxCell id="1" parent="0"/>
-    <mxCell id="title" value="HY-chat 前端、页面路由与请求架构" style="text;html=1;align=left;verticalAlign=middle;fontSize=24;fontStyle=1;fontColor=#172B4D;" vertex="1" parent="1">
+    <mxCell id="title" value="HY-Agent 前端、页面路由与请求架构" style="text;html=1;align=left;verticalAlign=middle;fontSize=24;fontStyle=1;fontColor=#172B4D;" vertex="1" parent="1">
       <mxGeometry x="30" y="10" width="900" height="40" as="geometry"/>
     </mxCell>
     <mxCell id="lane-browser" value="浏览器 / React" style="swimlane;horizontal=0;startSize=130;fillColor=#EAF2FF;strokeColor=#4C78C2;fontSize=16;fontStyle=1;html=1;" vertex="1" parent="1">

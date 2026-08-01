@@ -447,7 +447,7 @@ export function Thread() {
                 >
                   <BrandLogo className="size-9 border" />
                   <span className="truncate text-lg font-semibold tracking-tight sm:text-xl">
-                    HY-chat
+                    HY-Agent
                   </span>
                 </motion.button>
               </div>
@@ -518,7 +518,7 @@ export function Thread() {
                     <div className="flex items-center justify-center">
                       <BrandLogo
                         variant="wordmark"
-                        className="h-28 w-32 border shadow-sm"
+                        className="rounded-2xl border bg-white px-5 py-4 text-slate-950 shadow-sm"
                         priority
                       />
                     </div>
@@ -564,7 +564,7 @@ export function Thread() {
                             form?.requestSubmit();
                           }
                         }}
-                        placeholder="给 HY-chat 发送消息…"
+                        placeholder="给 HY-Agent 发送消息…"
                         className="field-sizing-content max-h-[34dvh] min-h-12 resize-none overflow-y-auto overscroll-contain border-none bg-transparent p-3 pb-0 shadow-none ring-0 outline-none focus:ring-0 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 sm:max-h-72 sm:p-3.5 sm:pb-0"
                       />
 
