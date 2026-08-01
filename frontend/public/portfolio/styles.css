@@ -506,7 +506,7 @@ a:focus-visible {
   opacity: 0;
   transform: translate3d(0, calc(-50% + 28px), 0);
   visibility: hidden;
-  will-change: opacity, transform;
+  contain: layout paint style;
 }
 
 .story-card::before,
@@ -545,6 +545,7 @@ a:focus-visible {
 .story-card.is-visible {
   visibility: visible;
   pointer-events: auto;
+  will-change: opacity, transform;
 }
 
 .story-card__index,
@@ -997,6 +998,8 @@ a:focus-visible {
     overflow-y: auto;
     transform: translate3d(0, 20px, 0);
     box-shadow: 6px 6px 0 rgba(0, 0, 0, 0.25);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
   }
 
   .story-card h1,

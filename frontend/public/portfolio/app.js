@@ -15,6 +15,12 @@
   const routeButtons = [...document.querySelectorAll(".route [data-scene-jump]")];
   const poseSprites = [...document.querySelectorAll(".character-sprite")];
   const poseMap = new Map(poseSprites.map(sprite => [sprite.dataset.pose, sprite]));
+  const poseFrames = new Map(poseSprites.map(sprite => [
+    sprite.dataset.pose,
+    [...sprite.querySelectorAll("[data-frame]")]
+  ]));
+  const frameLoadPromises = new WeakMap();
+  const poseReadyPromises = new Map();
 
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const coarsePointer = window.matchMedia("(hover: none) and (pointer: coarse)").matches;
@@ -51,6 +57,9 @@
   let lastCharacterProgress = 0;
   let characterTravelDistance = 0;
   let characterWalkFrame = 0;
+  let renderedCharacterPose = "intro";
+  let renderedCharacterFrame = 0;
+  let renderedCharacterWalking = false;
   let lastTextProgress = Number.NaN;
   let drawTextThisFrame = true;
   let lastWidth = window.innerWidth;
@@ -108,7 +117,7 @@
     canvas.width = logicalW;
     canvas.height = logicalH;
     ctx.imageSmoothingEnabled = false;
-    const textDpr = Math.min(2, window.devicePixelRatio || 1);
+    const textDpr = Math.min(coarsePointer ? 1.5 : 2, window.devicePixelRatio || 1);
     textCanvas.width = Math.round(width * textDpr);
     textCanvas.height = Math.round(window.innerHeight * textDpr);
     textCtx.setTransform(textDpr, 0, 0, textDpr, 0, 0);
@@ -154,23 +163,28 @@
 
   function loadFrame(frame) {
     if (!frame) return Promise.resolve(null);
+    if (frameLoadPromises.has(frame)) return frameLoadPromises.get(frame);
     if (!frame.getAttribute("src") && frame.dataset.src) frame.src = frame.dataset.src;
     const decode = () => {
       if (typeof frame.decode !== "function") return Promise.resolve(frame);
       return frame.decode().catch(() => undefined).then(() => frame);
     };
-    if (frame.complete && frame.naturalWidth) return decode();
-    return new Promise(resolve => {
-      const finish = () => decode().then(resolve);
-      frame.addEventListener("load", finish, { once: true });
-      frame.addEventListener("error", () => resolve(frame), { once: true });
-    });
+    const pending = frame.complete && frame.naturalWidth
+      ? decode()
+      : new Promise(resolve => {
+        const finish = () => decode().then(resolve);
+        frame.addEventListener("load", finish, { once: true });
+        frame.addEventListener("error", () => resolve(frame), { once: true });
+      });
+    frameLoadPromises.set(frame, pending);
+    return pending;
   }
 
   function ensurePose(id) {
+    if (poseReadyPromises.has(id)) return poseReadyPromises.get(id);
     const sprite = poseMap.get(id);
     if (!sprite) return Promise.resolve(null);
-    const frames = [...sprite.querySelectorAll("[data-frame]")];
+    const frames = poseFrames.get(id) || [];
     const primary = frames[0];
     const motionFrames = frames.slice(1);
 
@@ -183,7 +197,9 @@
       });
     }
 
-    return loadFrame(primary).then(() => sprite);
+    const ready = loadFrame(primary).then(() => sprite);
+    poseReadyPromises.set(id, ready);
+    return ready;
   }
 
   function requestPose(id) {
@@ -195,6 +211,7 @@
     desiredPose = id;
     ensurePose(id).then(sprite => {
       if (!sprite || desiredPose !== id) return;
+      poseMap.get(activePose)?.classList.remove("is-walking");
       poseSprites.forEach(node => node.classList.toggle("is-active", node === sprite));
       activePose = id;
       root.dataset.pose = id;
@@ -208,7 +225,8 @@
     const pose = POSES.find(item => progress <= item.end) || POSES[POSES.length - 1];
     requestPose(pose.id);
     const activeSprite = poseMap.get(activePose);
-    const activeFrameCount = activeSprite?.querySelectorAll("[data-frame]").length || 1;
+    const activeFrames = poseFrames.get(activePose) || [];
+    const activeFrameCount = activeFrames.length || 1;
     const isWalking = !reduceMotion && (
       time - lastScrollAt < 220 || Math.abs(targetProgress - renderProgress) > 0.00002
     );
@@ -223,27 +241,41 @@
     }
     const requestedFrame = reduceMotion ? 0 : characterWalkFrame % activeFrameCount;
 
-    poseSprites.forEach(sprite => {
-      const isActive = sprite.dataset.pose === activePose;
-      sprite.classList.toggle("is-walking", isActive && isWalking);
-      const selectedFrame = isActive && (requestedFrame === 0 || sprite.classList.contains("has-motion-frame"))
-        ? requestedFrame
-        : 0;
+    const selectedFrame = requestedFrame === 0 || activeSprite?.classList.contains("has-motion-frame")
+      ? requestedFrame
+      : 0;
+    const poseChanged = renderedCharacterPose !== activePose;
 
-      sprite.dataset.activeFrame = String(selectedFrame);
-      sprite.querySelectorAll("[data-frame]").forEach(frame => {
-        frame.classList.toggle("is-current-frame", Number(frame.dataset.frame) === selectedFrame);
-      });
+    if (activeSprite && (poseChanged || renderedCharacterWalking !== isWalking)) {
+      activeSprite.classList.toggle("is-walking", isWalking);
+      renderedCharacterWalking = isWalking;
+    }
 
-      if (isActive) characterFrame = selectedFrame;
-    });
-    root.dataset.characterFrame = String(characterFrame);
+    if (activeSprite && (poseChanged || renderedCharacterFrame !== selectedFrame)) {
+      if (poseChanged) {
+        activeFrames.forEach((frame, index) => {
+          frame.classList.toggle("is-current-frame", index === selectedFrame);
+        });
+      } else {
+        activeFrames[renderedCharacterFrame]?.classList.remove("is-current-frame");
+        activeFrames[selectedFrame]?.classList.add("is-current-frame");
+      }
+      activeSprite.dataset.activeFrame = String(selectedFrame);
+      renderedCharacterPose = activePose;
+      renderedCharacterFrame = selectedFrame;
+    }
+
+    characterFrame = selectedFrame;
+    if (root.dataset.characterFrame !== String(characterFrame)) {
+      root.dataset.characterFrame = String(characterFrame);
+    }
   }
 
   function updateInterface(progress, time = performance.now()) {
     updateCharacter(progress, time);
     let strongest = 0;
     let strongestOpacity = -1;
+    const mobile = window.innerWidth <= 720;
 
     cards.forEach((card, index) => {
       const opacity = cardOpacity(index, progress);
@@ -251,24 +283,24 @@
         strongestOpacity = opacity;
         strongest = index;
       }
-      card.style.opacity = opacity.toFixed(3);
+      const nextOpacity = opacity.toFixed(3);
+      if (card.style.opacity !== nextOpacity) card.style.opacity = nextOpacity;
       const travel = reduceMotion ? 0 : Math.round((0.5 - opacity) * 30);
-      const mobile = window.innerWidth <= 720;
-      card.style.transform = mobile
+      const nextTransform = mobile
         ? `translate3d(0, ${travel}px, 0)`
         : `translate3d(0, calc(-50% + ${travel}px), 0)`;
-    });
-
-    cards.forEach((card, index) => {
-      const selected = index === strongest;
-      card.classList.toggle("is-visible", selected);
-      card.setAttribute("aria-hidden", selected ? "false" : "true");
+      if (card.style.transform !== nextTransform) card.style.transform = nextTransform;
     });
 
     if (strongest !== activeScene) {
       activeScene = strongest;
       const accent = SCENES[strongest].accent;
       root.style.setProperty("--accent", accent);
+      cards.forEach((card, index) => {
+        const selected = index === strongest;
+        card.classList.toggle("is-visible", selected);
+        card.setAttribute("aria-hidden", selected ? "false" : "true");
+      });
       navButtons.forEach(button => button.classList.toggle("is-active", Number(button.dataset.sceneJump) === strongest));
       routeButtons.forEach(button => {
         const selected = Number(button.dataset.sceneJump) === strongest;
