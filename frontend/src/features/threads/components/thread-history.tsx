@@ -45,6 +45,7 @@ export function ThreadHistory({ disabled = false }: { disabled?: boolean }) {
           <Button
             className="hover:bg-muted"
             variant="ghost"
+            aria-label={chatHistoryOpen ? "收起会话列表" : "展开会话列表"}
             onClick={() => setChatHistoryOpen((p) => !p)}
           >
             {chatHistoryOpen ? (

@@ -346,7 +346,7 @@ export function Thread() {
         aria-hidden="true"
         className="hy-chat-ambient pointer-events-none absolute inset-0 z-0"
       />
-      <div className="relative z-10 hidden lg:flex">
+      <div className="relative z-30 hidden lg:flex">
         <motion.div
           className="bg-background absolute z-20 h-full overflow-hidden border-r"
           style={{ width: 300 }}
@@ -405,6 +405,9 @@ export function Thread() {
                     <Button
                       className="hover:bg-muted"
                       variant="ghost"
+                      aria-label={
+                        chatHistoryOpen ? "收起会话列表" : "展开会话列表"
+                      }
                       onClick={() => setChatHistoryOpen((p) => !p)}
                     >
                       {chatHistoryOpen ? (
@@ -428,6 +431,9 @@ export function Thread() {
                     <Button
                       className="hover:bg-muted"
                       variant="ghost"
+                      aria-label={
+                        chatHistoryOpen ? "收起会话列表" : "展开会话列表"
+                      }
                       onClick={() => setChatHistoryOpen((p) => !p)}
                     >
                       {chatHistoryOpen ? (

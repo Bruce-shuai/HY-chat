@@ -122,6 +122,9 @@ def test_frontend_proxy_streaming_has_bounded_unbuffered_reads() -> None:
     assert config.count("proxy_buffering off;") >= 6
     assert config.count("proxy_cache off;") == 3
     assert config.count("proxy_read_timeout 250s;") == 3
+    assert config.count("proxy_send_timeout 250s;") == 3
+    assert config.count("proxy_pass http://hy-chat-agent:2024/;") == 3
+    assert "proxy_pass http://hy-chat-frontend:3000;" not in config
     assert config.count("location ^~ /_next/static/ {") == 3
     assert 'Cache-Control "public, max-age=31536000, immutable"' not in config
     assert config.count("proxy_hide_header Cache-Control;") == 3
@@ -132,3 +135,11 @@ def test_frontend_proxy_streaming_has_bounded_unbuffered_reads() -> None:
         )
         == 3
     )
+
+
+def test_ecs_agent_is_reachable_only_through_internal_docker_networks() -> None:
+    compose = yaml.safe_load((ROOT / "deploy/ecs/compose.yml").read_text())
+    agent = compose["services"]["agent"]
+
+    assert agent["networks"] == ["default", "proxy"]
+    assert "ports" not in agent

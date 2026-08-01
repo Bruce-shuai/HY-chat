@@ -115,6 +115,9 @@ services:
       - rag_data:/data/rag
       - workspace_data:/workspace
       - agent_state:/app/.langgraph_api
+    networks:
+      - default
+      - proxy
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:2024/ok"]
       interval: 10s

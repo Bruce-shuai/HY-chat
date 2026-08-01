@@ -32,8 +32,10 @@ import {
   userBearerHeaders,
 } from "./agent-api-policy";
 import {
+  AgentRunCompletionReconciler,
   AgentRunTimeoutError,
   AgentRunWatchdog,
+  type AgentRunTerminalStatus,
   ResumedRunLifecycleTracker,
   resolveAgentRunTimeoutMs,
 } from "@/lib/agent-run-timeout";
@@ -136,6 +138,8 @@ const StreamSession = ({
   );
   const runWatchdogRef = useRef<AgentRunWatchdog | null>(null);
   runWatchdogRef.current ??= new AgentRunWatchdog(runTimeoutMs);
+  const runReconcilerRef = useRef<AgentRunCompletionReconciler | null>(null);
+  runReconcilerRef.current ??= new AgentRunCompletionReconciler();
   const watchdogThreadIdRef = useRef<string | null>(threadId ?? null);
   const wasStreamLoadingRef = useRef(false);
   const approvalLifecycleUnsubscribeRef = useRef<(() => void) | null>(null);
@@ -152,6 +156,7 @@ const StreamSession = ({
     return { ...STREAM_CALLER_OPTIONS };
   }, [controllerGeneration]);
   const activeRunRef = useRef<ActiveRun | null>(null);
+  const runAttemptStartedAtRef = useRef<number | null>(null);
   const currentThreadIdRef = useRef<string | null>(threadId ?? null);
   const previousQueryThreadIdRef = useRef<string | null>(threadId ?? null);
   const internalQueryThreadIdRef = useRef<string | null>(null);
@@ -166,10 +171,16 @@ const StreamSession = ({
     threadId: string | null;
     error: AgentRunTimeoutError;
   } | null>(null);
+  const [reconciledRunError, setReconciledRunError] = useState<{
+    threadId: string | null;
+    error: Error;
+  } | null>(null);
 
   const clearRunTimer = useCallback(() => {
     runWatchdogRef.current?.clear();
+    runReconcilerRef.current?.clear();
     watchdogThreadIdRef.current = null;
+    runAttemptStartedAtRef.current = null;
     approvalLifecycleUnsubscribeRef.current?.();
     approvalLifecycleUnsubscribeRef.current = null;
   }, []);
@@ -254,14 +265,13 @@ const StreamSession = ({
       const localStop = current
         .stop({ cancel: false })
         .catch((error) => console.warn("停止本地流式连接失败", error));
-      const transportCleanup =
-        cancel && resetController
-          ? current
-              .getThread()
-              ?.close()
-              .catch((error) => console.warn("关闭旧 Agent 连接失败", error))
-          : undefined;
-      if (cancel && resetController) {
+      const transportCleanup = resetController
+        ? current
+            .getThread()
+            ?.close()
+            .catch((error) => console.warn("关闭旧 Agent 连接失败", error))
+        : undefined;
+      if (resetController) {
         setControllerGeneration((generation) => {
           const nextGeneration = generation + 1;
           controllerRunThreadIdsRef.current.set(
@@ -279,7 +289,7 @@ const StreamSession = ({
               activeRun?.runId,
               transportCleanup,
             )
-          : Promise.resolve();
+          : waitAtMost(transportCleanup, DEFAULT_RUN_CANCEL_TIMEOUT_MS);
 
       await Promise.all([localStop, remoteCancellation]);
     },
@@ -290,6 +300,7 @@ const StreamSession = ({
     (targetThreadId: string | null) => {
       watchdogThreadIdRef.current = targetThreadId;
       setTimeoutState(null);
+      setReconciledRunError(null);
       runWatchdogRef.current?.start(() => {
         const timedThreadId =
           watchdogThreadIdRef.current ??
@@ -305,6 +316,59 @@ const StreamSession = ({
           resetController: true,
         });
       });
+
+      runReconcilerRef.current?.start(
+        async () => {
+          const current = streamRef.current;
+          const startedAt = runAttemptStartedAtRef.current;
+          const activeRun = activeRunRef.current;
+          const currentTarget =
+            activeRun?.threadId ??
+            watchdogThreadIdRef.current ??
+            runThreadIdRef.current ??
+            current?.threadId ??
+            currentThreadIdRef.current;
+          if (!current || !currentTarget || startedAt === null)
+            return undefined;
+
+          if (activeRun?.threadId === currentTarget) {
+            return (
+              await current.client.runs.get(currentTarget, activeRun.runId)
+            ).status;
+          }
+
+          const runs = await current.client.runs.list(currentTarget, {
+            limit: 5,
+          });
+          const earliestMatchingCreation = startedAt - 2_000;
+          return runs.find(
+            (run) => Date.parse(run.created_at) >= earliestMatchingCreation,
+          )?.status;
+        },
+        (status: AgentRunTerminalStatus) => {
+          const reconciledThreadId =
+            activeRunRef.current?.threadId ??
+            watchdogThreadIdRef.current ??
+            runThreadIdRef.current ??
+            streamRef.current?.threadId ??
+            currentThreadIdRef.current;
+          if (status === "error" || status === "timeout") {
+            setReconciledRunError({
+              threadId: reconciledThreadId,
+              error: new Error(
+                status === "timeout"
+                  ? "模型服务处理超时，请重新发送这条消息。"
+                  : "本次回答执行失败，请重新发送这条消息。",
+              ),
+            });
+          }
+          void stopCurrentRun({
+            cancel: false,
+            targetThreadId: reconciledThreadId,
+            resetController: true,
+          });
+        },
+      );
     },
     [runTimeoutMs, stopCurrentRun],
   );
@@ -358,7 +422,11 @@ const StreamSession = ({
     },
     onCompleted: ({ runId }) => {
       if (callbackGeneration !== controllerGenerationRef.current) return;
-      if (!runId || activeRunRef.current?.runId === runId) {
+      if (
+        !runId ||
+        activeRunRef.current === null ||
+        activeRunRef.current.runId === runId
+      ) {
         activeRunRef.current = null;
         clearRunTimer();
       }
@@ -422,6 +490,7 @@ const StreamSession = ({
         runThreadIdRef.current,
       );
       activeRunRef.current = null;
+      runAttemptStartedAtRef.current = Date.now();
       armRunWatchdog(runThreadIdRef.current);
       try {
         await current.submit(input, {
@@ -443,6 +512,7 @@ const StreamSession = ({
       if (!current) return;
       runThreadIdRef.current =
         current.threadId ?? currentThreadIdRef.current ?? null;
+      runAttemptStartedAtRef.current = null;
       armRunWatchdog(runThreadIdRef.current);
       watchApprovalLifecycle(current);
       try {
@@ -462,6 +532,7 @@ const StreamSession = ({
       if (!current) return;
       runThreadIdRef.current =
         current.threadId ?? currentThreadIdRef.current ?? null;
+      runAttemptStartedAtRef.current = null;
       armRunWatchdog(runThreadIdRef.current);
       watchApprovalLifecycle(current);
       try {
@@ -498,10 +569,15 @@ const StreamSession = ({
     timeoutState?.threadId === streamValue.threadId
       ? timeoutState.error
       : undefined;
+  const visibleReconciledRunError =
+    reconciledRunError?.threadId === streamValue.threadId
+      ? reconciledRunError.error
+      : undefined;
   const contextValue = useMemo<StreamContextType>(
     () => ({
       ...streamValue,
-      error: visibleTimeoutError ?? streamValue.error,
+      error:
+        visibleTimeoutError ?? visibleReconciledRunError ?? streamValue.error,
       stop: stopSafely,
       submit: submitWithTimeout,
       respond: respondWithTimeout,
@@ -511,6 +587,7 @@ const StreamSession = ({
     [
       streamValue,
       visibleTimeoutError,
+      visibleReconciledRunError,
       stopSafely,
       submitWithTimeout,
       respondWithTimeout,

@@ -3,13 +3,20 @@ import { test } from "node:test";
 
 import {
   AGENT_RUN_TIMEOUT_ERROR_CODE,
+  AgentRunCompletionReconciler,
   AgentRunTimeoutError,
   AgentRunWatchdog,
   DEFAULT_AGENT_RUN_TIMEOUT_MS,
   ResumedRunLifecycleTracker,
+  isTerminalAgentRunStatus,
   isAgentRunTimeoutError,
   resolveAgentRunTimeoutMs,
 } from "../src/lib/agent-run-timeout.ts";
+
+async function flushMicrotasks() {
+  await Promise.resolve();
+  await Promise.resolve();
+}
 
 test("chat run timeout defaults to three minutes for invalid configuration", () => {
   for (const value of [undefined, "", "not-a-number", "0", "1000", "900000"]) {
@@ -108,4 +115,58 @@ test("a stale pre-resume interrupt does not clear the approval watchdog", (t) =>
   t.mock.timers.tick(180000);
 
   assert.equal(timedOut, true);
+});
+
+test("run reconciliation ignores active states and detects a terminal run", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const reconciler = new AgentRunCompletionReconciler(12000, 3000);
+  const statuses = ["running", "success"];
+  const terminals = [];
+
+  reconciler.start(
+    async () => statuses.shift(),
+    (status) => terminals.push(status),
+  );
+  t.mock.timers.tick(12000);
+  await flushMicrotasks();
+  assert.deepEqual(terminals, []);
+  assert.equal(reconciler.isActive, true);
+
+  t.mock.timers.tick(3000);
+  await flushMicrotasks();
+  assert.deepEqual(terminals, ["success"]);
+  assert.equal(reconciler.isActive, false);
+});
+
+test("clearing reconciliation invalidates an in-flight status read", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const reconciler = new AgentRunCompletionReconciler(12000, 3000);
+  let resolveStatus;
+  const status = new Promise((resolve) => {
+    resolveStatus = resolve;
+  });
+  let terminalCount = 0;
+
+  reconciler.start(
+    () => status,
+    () => {
+      terminalCount += 1;
+    },
+  );
+  t.mock.timers.tick(12000);
+  reconciler.clear();
+  resolveStatus("success");
+  await flushMicrotasks();
+
+  assert.equal(terminalCount, 0);
+  assert.equal(reconciler.isActive, false);
+});
+
+test("only final Agent run statuses trigger stream reconciliation", () => {
+  assert.equal(isTerminalAgentRunStatus("pending"), false);
+  assert.equal(isTerminalAgentRunStatus("running"), false);
+  assert.equal(isTerminalAgentRunStatus("success"), true);
+  assert.equal(isTerminalAgentRunStatus("error"), true);
+  assert.equal(isTerminalAgentRunStatus("timeout"), true);
+  assert.equal(isTerminalAgentRunStatus("interrupted"), true);
 });

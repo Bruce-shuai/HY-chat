@@ -1,5 +1,15 @@
 export const AGENT_RUN_TIMEOUT_ERROR_CODE = "AGENT_RUN_TIMEOUT";
 export const DEFAULT_AGENT_RUN_TIMEOUT_MS = 180_000;
+export const DEFAULT_AGENT_RUN_RECONCILE_DELAY_MS = 12_000;
+export const DEFAULT_AGENT_RUN_RECONCILE_INTERVAL_MS = 3_000;
+
+export type AgentRunStatus =
+  "pending" | "running" | "error" | "success" | "timeout" | "interrupted";
+
+export type AgentRunTerminalStatus = Exclude<
+  AgentRunStatus,
+  "pending" | "running"
+>;
 
 const MIN_AGENT_RUN_TIMEOUT_MS = 10_000;
 const MAX_AGENT_RUN_TIMEOUT_MS = 600_000;
@@ -59,6 +69,81 @@ export class AgentRunWatchdog {
 
   get isActive(): boolean {
     return this.timer !== null;
+  }
+}
+
+export function isTerminalAgentRunStatus(
+  status: unknown,
+): status is AgentRunTerminalStatus {
+  return (
+    status === "error" ||
+    status === "success" ||
+    status === "timeout" ||
+    status === "interrupted"
+  );
+}
+
+/**
+ * Polls the authoritative Run record only after a stream has been quiet long
+ * enough to be suspicious. This is a recovery path for a lost SSE terminal:
+ * the normal stream remains the fast path and clears this timer first.
+ */
+export class AgentRunCompletionReconciler {
+  private timer: ReturnType<typeof setTimeout> | null = null;
+  private active = false;
+  private generation = 0;
+  readonly initialDelayMs: number;
+  readonly intervalMs: number;
+
+  constructor(
+    initialDelayMs = DEFAULT_AGENT_RUN_RECONCILE_DELAY_MS,
+    intervalMs = DEFAULT_AGENT_RUN_RECONCILE_INTERVAL_MS,
+  ) {
+    this.initialDelayMs = initialDelayMs;
+    this.intervalMs = intervalMs;
+  }
+
+  start(
+    readStatus: () => Promise<unknown>,
+    onTerminal: (status: AgentRunTerminalStatus) => void,
+  ): void {
+    if (this.active) return;
+    this.active = true;
+    const generation = ++this.generation;
+
+    const schedule = (delayMs: number) => {
+      this.timer = setTimeout(async () => {
+        this.timer = null;
+        let status: unknown;
+        try {
+          status = await readStatus();
+        } catch {
+          // A transient status-read failure must not replace the main timeout.
+        }
+
+        if (!this.active || generation !== this.generation) return;
+        if (isTerminalAgentRunStatus(status)) {
+          this.active = false;
+          onTerminal(status);
+          return;
+        }
+        schedule(this.intervalMs);
+      }, delayMs);
+    };
+
+    schedule(this.initialDelayMs);
+  }
+
+  clear(): void {
+    this.active = false;
+    this.generation += 1;
+    if (this.timer === null) return;
+    clearTimeout(this.timer);
+    this.timer = null;
+  }
+
+  get isActive(): boolean {
+    return this.active;
   }
 }
 
