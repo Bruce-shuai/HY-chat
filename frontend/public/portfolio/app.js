@@ -647,9 +647,57 @@
     pixelText(sublabel, x + width - 8, y - 17, "#8fa4b8", 6, "right");
   }
 
-  function drawWork(cameraX) {
+  function drawWorkstation(wx, cameraX, time, accent, dualScreen = false) {
+    const x = screenX(wx, cameraX);
+    const width = dualScreen ? 122 : 96;
+    if (!isVisible(x, width)) return;
+
+    const floor = groundY - 2;
+    const screenY = floor - 82;
+    const tick = reduceMotion ? 0 : Math.floor(time / 360);
+    const screens = dualScreen ? 2 : 1;
+    const screenWidth = dualScreen ? 52 : 72;
+
+    rect(x - 5, screenY - 7, width + 10, 66, "rgba(5, 13, 26, 0.34)");
+    for (let index = 0; index < screens; index += 1) {
+      const sx = x + 7 + index * 57;
+      rect(sx, screenY, screenWidth, 43, "#091321");
+      rect(sx + 3, screenY + 3, screenWidth - 6, 34, "#10283b");
+      rect(sx + 7, screenY + 8, 14 + ((tick + index) % 3) * 5, 2, accent);
+      rect(sx + 7, screenY + 14, screenWidth - 19, 2, "#41647c");
+      rect(sx + 11, screenY + 20, screenWidth - 26, 2, "#294b62");
+      rect(sx + 7, screenY + 26, 18 + ((tick + index + 1) % 4) * 4, 2, "#d5bb69");
+      rect(sx + 7, screenY + 32, 3, 2, (tick + index) % 2 ? accent : "#10283b");
+      rect(sx + Math.floor(screenWidth / 2) - 2, screenY + 43, 4, 7, "#31495d");
+      rect(sx + Math.floor(screenWidth / 2) - 9, screenY + 49, 18, 3, "#3b5365");
+    }
+
+    rect(x, floor - 29, width, 5, "#3a5061");
+    rect(x + 5, floor - 24, 5, 24, "#233748");
+    rect(x + width - 10, floor - 24, 5, 24, "#233748");
+    rect(x + 25, floor - 22, dualScreen ? 51 : 40, 4, "#162737");
+    for (let key = 0; key < (dualScreen ? 9 : 7); key += 1) {
+      rect(x + 28 + key * 5, floor - 21, 3, 1, key === tick % 7 ? accent : "#587080");
+    }
+    rect(x + width - 25, floor - 22, 5, 4, "#506a7a");
+
+    rect(x + 13, floor - 24, 16, 22, "#0a1421");
+    rect(x + 16, floor - 21, 10, 3, "#24394c");
+    rect(x + 17, floor - 14, 3, 2, tick % 2 ? accent : "#3b5569");
+    rect(x + 22, floor - 14, 3, 2, "#d5bb69");
+    rect(x + 14, floor - 2, 14, 2, "#1b2d3c");
+
+    rect(x + width - 13, floor - 36, 8, 8, "#172938");
+    rect(x + width - 12, floor - 39, 2, 3, "#627d8d");
+    rect(x + width - 6, floor - 38, 4, 2, "#627d8d");
+  }
+
+  function drawWork(cameraX, time) {
     drawOfficeBuilding(1260, cameraX, "社交之城", "2023 — 2025", "#62b7ff");
     drawOfficeBuilding(1840, cameraX, "全球骑手履约", "2025 — 至今", "#5ee6c4");
+    drawWorkstation(1110, cameraX, time, "#62b7ff", true);
+    drawWorkstation(1450, cameraX, time, "#5ee6c4", false);
+    drawWorkstation(2115, cameraX, time, "#62b7ff", true);
 
     const billboard = screenX(1545, cameraX);
     if (isVisible(billboard, 160)) {
@@ -857,7 +905,7 @@
     drawPineForest(cameraX, renderProgress);
     drawGround(cameraX, renderProgress);
     drawIntro(cameraX, time);
-    drawWork(cameraX);
+    drawWork(cameraX, time);
     drawAI(cameraX, time);
     drawLife(cameraX, time);
     drawFinale(cameraX, time);
