@@ -201,9 +201,43 @@ a:focus-visible {
   height: clamp(340px, 48vh, 510px);
 }
 
-.character-sprite.is-active[data-active-frame="1"],
-.character-sprite.is-active[data-active-frame="3"] {
-  transform: translate3d(calc(-50% - 2px), -6px, 0) scale(1);
+.character-sprite.is-active.is-walking {
+  transition-duration: 120ms, 90ms, 120ms;
+}
+
+.character-sprite.is-active.is-walking[data-pose="work"][data-active-frame="1"],
+.character-sprite.is-active.is-walking[data-pose="travel"][data-active-frame="1"] {
+  transform: translate3d(calc(-50% - 4px), -3px, 0) rotate(-0.7deg) scale(1);
+}
+
+.character-sprite.is-active.is-walking[data-pose="work"][data-active-frame="2"],
+.character-sprite.is-active.is-walking[data-pose="travel"][data-active-frame="2"] {
+  transform: translate3d(calc(-50% + 2px), 0, 0) rotate(0.35deg) scale(1);
+}
+
+.character-sprite.is-active.is-walking[data-pose="work"][data-active-frame="3"],
+.character-sprite.is-active.is-walking[data-pose="travel"][data-active-frame="3"] {
+  transform: translate3d(calc(-50% + 5px), -3px, 0) rotate(0.7deg) scale(1);
+}
+
+.character-sprite.is-active.is-walking[data-pose="intro"][data-active-frame="1"] {
+  transform: translate3d(calc(-50% + 2px), 0, 0) rotate(0.8deg) scale(1.006);
+}
+
+.character-sprite.is-active.is-walking[data-pose="ai"][data-active-frame="1"] {
+  transform: translate3d(calc(-50% - 2px), -2px, 0) rotate(-0.45deg) scale(1.01);
+}
+
+.character-sprite.is-active.is-walking[data-pose="cycling"][data-active-frame="1"] {
+  transform: translate3d(calc(-50% + 6px), 0, 0) rotate(0.6deg) scale(1);
+}
+
+.character-sprite.is-active.is-walking[data-pose="boxing"][data-active-frame="1"] {
+  transform: translate3d(calc(-50% + 5px), 0, 0) rotate(0.9deg) scale(1.008);
+}
+
+.character-sprite.is-active.is-walking[data-pose="finale"][data-active-frame="1"] {
+  transform: translate3d(-50%, -2px, 0) rotate(-0.5deg) scale(1.012);
 }
 
 .character-sprite[data-pose="work"]::after,
@@ -230,6 +264,123 @@ a:focus-visible {
   right: 12%;
   opacity: 1;
   transform: scaleX(-1);
+}
+
+.character-sprite[data-pose="work"] [data-frame="0"] {
+  top: 0.9%;
+}
+
+.character-sprite[data-pose="work"] [data-frame="1"] {
+  bottom: -0.4%;
+}
+
+.character-sprite[data-pose="work"] [data-frame="2"] {
+  bottom: -2.9%;
+}
+
+.character-sprite[data-pose="work"] [data-frame="3"] {
+  bottom: -5%;
+}
+
+.character-sprite[data-pose="travel"] [data-frame="0"] {
+  top: 0.9%;
+}
+
+.character-sprite[data-pose="travel"] [data-frame="1"],
+.character-sprite[data-pose="travel"] [data-frame="2"] {
+  bottom: -0.5%;
+}
+
+.character-sprite.is-walking[data-pose="intro"]::after,
+.character-sprite.is-walking[data-pose="finale"]::after {
+  content: "";
+  position: absolute;
+  z-index: 2;
+  top: 24%;
+  right: -11%;
+  width: 5px;
+  height: 5px;
+  background: #ffe08a;
+  box-shadow:
+    16px 8px 0 #5ee6c4,
+    -7px 18px 0 #62b7ff,
+    8px 29px 0 rgba(255, 224, 138, 0.72);
+  animation: character-spark 700ms steps(4, end) infinite;
+}
+
+.character-sprite.is-walking[data-pose="ai"]::before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  top: 28%;
+  right: -15%;
+  width: 36px;
+  height: 36px;
+  border: 2px solid rgba(180, 124, 255, 0.78);
+  box-shadow:
+    -9px 12px 0 -6px #5ee6c4,
+    12px -8px 0 -6px #62b7ff;
+  animation: character-orbit 900ms steps(8, end) infinite;
+}
+
+.character-sprite.is-walking[data-pose="cycling"]::before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  left: -24%;
+  top: 62%;
+  width: 52px;
+  height: 2px;
+  background: rgba(255, 184, 77, 0.8);
+  box-shadow:
+    -16px 11px 0 rgba(94, 230, 196, 0.56),
+    9px 22px 0 rgba(98, 183, 255, 0.42);
+  animation: character-speed-lines 420ms steps(3, end) infinite;
+}
+
+.character-sprite.is-walking[data-pose="boxing"][data-active-frame="1"]::after {
+  content: "";
+  position: absolute;
+  z-index: 2;
+  top: 31%;
+  right: -16%;
+  width: 22px;
+  height: 22px;
+  border: 3px solid rgba(255, 184, 77, 0.86);
+  box-shadow: 9px 0 0 -5px #ff6f5e;
+  animation: character-impact 300ms steps(3, end) both;
+}
+
+@keyframes character-spark {
+  50% {
+    opacity: 0.42;
+    transform: translate3d(3px, -5px, 0) rotate(45deg) scale(0.72);
+  }
+}
+
+@keyframes character-orbit {
+  to {
+    transform: rotate(360deg) scale(0.86);
+  }
+}
+
+@keyframes character-speed-lines {
+  50% {
+    opacity: 0.35;
+    transform: translateX(-18px);
+  }
+}
+
+@keyframes character-impact {
+  from {
+    opacity: 1;
+    transform: scale(0.45) rotate(0deg);
+  }
+
+  to {
+    opacity: 0;
+    transform: scale(1.45) rotate(45deg);
+  }
 }
 
 .progress {

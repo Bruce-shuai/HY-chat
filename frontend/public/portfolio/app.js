@@ -28,7 +28,7 @@
   ];
 
   const WORLD_TRAVEL = 5400;
-  const CHARACTER_STEP_MS = 110;
+  const CHARACTER_STEP_MS = 150;
   const POSES = [
     { id: "intro", end: 0.13 },
     { id: "work", end: 0.39 },
@@ -113,7 +113,7 @@
     textCtx.setTransform(textDpr, 0, 0, textDpr, 0, 0);
     textCtx.imageSmoothingEnabled = true;
     lastTextProgress = Number.NaN;
-    groundY = Math.round(logicalH * (width <= 720 ? 0.57 : 0.8));
+    groundY = Math.round(logicalH * (width <= 720 ? 0.48 : 0.8));
     updateScroll();
     needsDraw = true;
   }
@@ -205,7 +205,7 @@
     const activeSprite = poseMap.get(activePose);
     const activeFrameCount = activeSprite?.querySelectorAll("[data-frame]").length || 1;
     const isWalking = !reduceMotion && (
-      time - lastScrollAt < 180 || Math.abs(targetProgress - renderProgress) > 0.00002
+      time - lastScrollAt < 220 || Math.abs(targetProgress - renderProgress) > 0.00002
     );
     if (isWalking && time - lastCharacterStepAt >= CHARACTER_STEP_MS) {
       characterWalkFrame = (characterWalkFrame + 1) % activeFrameCount;
@@ -649,7 +649,7 @@
 
   function drawWork(cameraX) {
     drawOfficeBuilding(1260, cameraX, "社交之城", "2023 — 2025", "#62b7ff");
-    drawOfficeBuilding(1840, cameraX, "全球履约", "2025 — 至今", "#5ee6c4");
+    drawOfficeBuilding(1840, cameraX, "全球骑手履约", "2025 — 至今", "#5ee6c4");
 
     const billboard = screenX(1545, cameraX);
     if (isVisible(billboard, 160)) {
@@ -885,7 +885,8 @@
       needsDraw = false;
     }
 
-    if (!reduceMotion || moving || needsDraw) ensureLoop();
+    const interactionActive = time - lastScrollAt < 260;
+    if (moving || interactionActive || needsDraw) ensureLoop();
   }
 
   function ensureLoop() {
@@ -952,6 +953,7 @@
       }).map(sprite => sprite.dataset.pose),
       loadedMotionFrames: poseSprites.filter(sprite => sprite.classList.contains("has-motion-frame")).map(sprite => sprite.dataset.pose),
       canvas: { width: canvas.width, height: canvas.height },
+      renderLoopActive: Boolean(rafId),
       reducedMotion: reduceMotion,
       coarsePointer
     })
