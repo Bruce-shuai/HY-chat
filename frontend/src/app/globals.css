@@ -124,6 +124,7 @@
     font-family:
       -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
       "Microsoft YaHei", Arial, sans-serif;
+    text-rendering: optimizeLegibility;
   }
 
   :root {
@@ -144,11 +145,154 @@
 }
 
 @layer utilities {
+  .hy-dot-grid {
+    background-image: radial-gradient(
+      circle,
+      rgb(255 255 255 / 0.16) 1px,
+      transparent 1px
+    );
+    background-size: 22px 22px;
+    mask-image: linear-gradient(to bottom, black, transparent 88%);
+  }
+
+  .hy-login-ambient {
+    background:
+      radial-gradient(
+        circle at 18% 12%,
+        rgb(45 212 191 / 0.23),
+        transparent 28rem
+      ),
+      radial-gradient(
+        circle at 85% 18%,
+        rgb(96 165 250 / 0.18),
+        transparent 25rem
+      ),
+      radial-gradient(
+        circle at 70% 92%,
+        rgb(167 139 250 / 0.14),
+        transparent 26rem
+      ),
+      linear-gradient(145deg, #071311 0%, #09131c 52%, #111226 100%);
+  }
+
+  .hy-chat-ambient {
+    background:
+      radial-gradient(
+        circle at 8% 8%,
+        rgb(45 212 191 / 0.07),
+        transparent 24rem
+      ),
+      radial-gradient(
+        circle at 91% 18%,
+        rgb(96 165 250 / 0.06),
+        transparent 28rem
+      ),
+      radial-gradient(
+        circle at 58% 100%,
+        rgb(167 139 250 / 0.05),
+        transparent 25rem
+      );
+  }
+
+  .hy-glass-surface,
+  .hy-glass-strong,
+  .hy-glass-control {
+    background-color: rgb(255 255 255 / 0.86);
+    border-color: rgb(255 255 255 / 0.7);
+    box-shadow:
+      0 18px 50px rgb(15 23 42 / 0.09),
+      inset 0 1px 0 rgb(255 255 255 / 0.85);
+  }
+
+  .hy-glass-strong {
+    background-color: rgb(255 255 255 / 0.78);
+    box-shadow:
+      0 24px 70px rgb(15 23 42 / 0.13),
+      inset 0 1px 0 rgb(255 255 255 / 0.9);
+  }
+
+  .hy-glass-control {
+    background-color: rgb(255 255 255 / 0.76);
+    box-shadow:
+      0 10px 30px rgb(15 23 42 / 0.08),
+      inset 0 1px 0 rgb(255 255 255 / 0.82);
+  }
+
+  .dark .hy-glass-surface,
+  .dark .hy-glass-strong,
+  .dark .hy-glass-control {
+    background-color: rgb(18 24 32 / 0.84);
+    border-color: rgb(255 255 255 / 0.11);
+    box-shadow:
+      0 22px 60px rgb(0 0 0 / 0.28),
+      inset 0 1px 0 rgb(255 255 255 / 0.09);
+  }
+
+  .dark .hy-glass-strong {
+    background-color: rgb(18 24 32 / 0.76);
+  }
+
+  .hy-accent-text {
+    background: linear-gradient(115deg, #5eead4 0%, #7dd3fc 48%, #c4b5fd 100%);
+    background-clip: text;
+    color: transparent;
+  }
+
   .shadow-inner-right {
     box-shadow: inset -9px 0 6px -1px rgb(0 0 0 / 0.02);
   }
 
   .shadow-inner-left {
     box-shadow: inset 9px 0 6px -1px rgb(0 0 0 / 0.02);
+  }
+}
+
+@supports (
+  (-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))
+) {
+  .hy-glass-surface {
+    -webkit-backdrop-filter: blur(18px) saturate(135%);
+    backdrop-filter: blur(18px) saturate(135%);
+  }
+
+  .hy-glass-strong {
+    -webkit-backdrop-filter: blur(24px) saturate(145%);
+    backdrop-filter: blur(24px) saturate(145%);
+  }
+
+  .hy-glass-control {
+    -webkit-backdrop-filter: blur(14px) saturate(130%);
+    backdrop-filter: blur(14px) saturate(130%);
+  }
+}
+
+@media (max-width: 767px), (prefers-reduced-transparency: reduce) {
+  .hy-glass-surface,
+  .hy-glass-strong,
+  .hy-glass-control {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .hy-chat-ambient {
+    background: radial-gradient(
+      circle at 50% 0%,
+      rgb(45 212 191 / 0.045),
+      transparent 20rem
+    );
+  }
+}
+
+@media (forced-colors: active) {
+  .hy-glass-surface,
+  .hy-glass-strong,
+  .hy-glass-control {
+    border: 1px solid CanvasText;
+    background: Canvas;
+    box-shadow: none;
+  }
+
+  .hy-accent-text {
+    color: CanvasText;
   }
 }

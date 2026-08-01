@@ -1,13 +1,20 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { LoaderCircle, UserRound } from "lucide-react";
+import {
+  Database,
+  LoaderCircle,
+  ShieldCheck,
+  Sparkles,
+  UserRound,
+} from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/providers/Auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { BrandLogo } from "@/components/brand-logo";
+import { DistortedGlass } from "@/components/ui/distorted-glass";
 
 function getLoginErrorMessage(reason: unknown) {
   const message = reason instanceof Error ? reason.message : String(reason);
@@ -111,26 +118,60 @@ export function LoginScreen() {
   };
 
   return (
-    <main className="bg-muted/30 flex min-h-dvh items-center justify-center p-4 sm:p-8">
-      <div className="bg-background grid w-full max-w-4xl overflow-hidden rounded-3xl border shadow-xl md:grid-cols-[1.05fr_1fr]">
-        <section className="hidden bg-slate-950 p-10 text-white md:flex md:flex-col md:justify-between">
-          <div className="flex items-center">
+    <main className="hy-login-ambient relative isolate flex min-h-dvh items-center justify-center overflow-hidden p-3 sm:p-8">
+      <div
+        aria-hidden="true"
+        className="hy-dot-grid pointer-events-none absolute inset-0 opacity-70"
+      />
+      <div className="hy-glass-strong relative grid w-full max-w-5xl overflow-hidden rounded-[2rem] border border-white/15 shadow-2xl md:grid-cols-[1.08fr_1fr]">
+        <section className="relative hidden min-h-[650px] overflow-hidden bg-[linear-gradient(145deg,rgba(5,23,20,0.96),rgba(11,24,38,0.93)_55%,rgba(27,24,55,0.94))] p-10 text-white md:flex md:flex-col md:justify-between lg:p-12">
+          <div
+            aria-hidden="true"
+            className="absolute -top-24 -right-20 size-72 rounded-full bg-cyan-300/12 blur-3xl"
+          />
+          <div
+            aria-hidden="true"
+            className="absolute bottom-10 -left-20 size-64 rounded-full bg-emerald-300/12 blur-3xl"
+          />
+          <div className="relative z-10 flex items-center">
             <BrandLogo
               variant="wordmark"
               className="text-white"
               priority
             />
           </div>
-          <div>
-            <h1 className="text-4xl leading-tight font-semibold">
-              对话、知识库与工具，集中在一个安全工作台。
+          <div className="relative z-10 max-w-md">
+            <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/8 px-3 py-1.5 text-xs font-medium text-emerald-100">
+              <Sparkles className="size-3.5" />
+              你的智能工作台
+            </div>
+            <h1 className="text-4xl leading-[1.15] font-semibold tracking-tight lg:text-5xl">
+              让想法与工具，在一个
+              <span className="hy-accent-text">智能空间</span>
+              里协作。
             </h1>
-            <p className="mt-5 text-sm leading-6 text-slate-300">
-              支持多会话、模型切换、知识库检索、运行追踪、对象存储与细粒度智能权限。
+            <p className="mt-6 max-w-sm text-sm leading-7 text-slate-300">
+              从日常对话到知识检索、文件处理与 Coding
+              Agent，让复杂任务拥有清晰、可追踪的执行过程。
             </p>
+            <div className="mt-8 grid gap-3 text-sm text-slate-200 sm:grid-cols-2">
+              <div className="flex items-center gap-2.5 rounded-xl border border-white/10 bg-white/6 px-3 py-2.5">
+                <Database className="size-4 text-cyan-200" />
+                知识与文件集中管理
+              </div>
+              <div className="flex items-center gap-2.5 rounded-xl border border-white/10 bg-white/6 px-3 py-2.5">
+                <ShieldCheck className="size-4 text-emerald-200" />
+                权限与执行全程可控
+              </div>
+            </div>
           </div>
+          <DistortedGlass
+            tone="dark"
+            className="absolute inset-x-0 bottom-0 hidden h-24 opacity-55 xl:block"
+          />
         </section>
-        <section className="p-6 sm:p-10">
+        <section className="relative bg-white/90 p-6 sm:p-10 lg:p-12 dark:bg-slate-950/88">
+          <div className="absolute inset-x-0 top-0 hidden h-px bg-gradient-to-r from-transparent via-teal-300/60 to-transparent md:block" />
           <div className="mb-8 md:hidden">
             <div className="flex items-center">
               <BrandLogo
@@ -141,20 +182,22 @@ export function LoginScreen() {
             </div>
           </div>
           {mode === "login" || mode === "register" ? (
-            <div className="bg-muted mb-6 flex rounded-xl p-1">
+            <div className="hy-glass-control mb-8 flex rounded-xl border p-1">
               {(["login", "register"] as const).map((item) => (
                 <button
                   key={item}
                   onClick={() => setMode(item)}
-                  className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium ${mode === item ? "bg-background shadow-sm" : "text-muted-foreground"}`}
+                  className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${mode === item ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
                 >
                   {item === "login" ? "登录" : "注册"}
                 </button>
               ))}
             </div>
           ) : null}
-          <h2 className="text-2xl font-semibold">{modeCopy[mode].title}</h2>
-          <p className="text-muted-foreground mt-1 text-sm">
+          <h2 className="text-3xl font-semibold tracking-tight">
+            {modeCopy[mode].title}
+          </h2>
+          <p className="text-muted-foreground mt-2 text-sm leading-6">
             {modeCopy[mode].description}
           </p>
           <form
@@ -165,6 +208,7 @@ export function LoginScreen() {
               <Input
                 name="displayName"
                 placeholder="显示名称"
+                className="bg-background/75 h-11 rounded-xl"
                 required
               />
             )}
@@ -173,6 +217,8 @@ export function LoginScreen() {
                 name="email"
                 type="email"
                 placeholder="邮箱"
+                autoComplete="email"
+                className="bg-background/75 h-11 rounded-xl"
                 required
               />
             )}
@@ -182,6 +228,7 @@ export function LoginScreen() {
                 value={resetToken}
                 onChange={(event) => setResetToken(event.target.value)}
                 placeholder="重置口令"
+                className="bg-background/75 h-11 rounded-xl"
                 required
               />
             )}
@@ -194,6 +241,10 @@ export function LoginScreen() {
                     : "密码（至少 8 位）"
                 }
                 minLength={mode === "login" ? 1 : 8}
+                autoComplete={
+                  mode === "login" ? "current-password" : "new-password"
+                }
+                className="bg-background/75 h-11 rounded-xl"
                 required
               />
             )}
@@ -202,13 +253,29 @@ export function LoginScreen() {
                 name="confirmPassword"
                 placeholder="确认新密码"
                 minLength={8}
+                autoComplete="new-password"
+                className="bg-background/75 h-11 rounded-xl"
                 required
               />
             )}
-            {notice && <p className="text-sm text-emerald-700">{notice}</p>}
-            {error && <p className="text-sm text-red-600">{error}</p>}
+            {notice && (
+              <p
+                className="rounded-xl border border-emerald-200 bg-emerald-50/80 px-3 py-2 text-sm text-emerald-700"
+                aria-live="polite"
+              >
+                {notice}
+              </p>
+            )}
+            {error && (
+              <p
+                className="rounded-xl border border-red-200 bg-red-50/80 px-3 py-2 text-sm text-red-700"
+                role="alert"
+              >
+                {error}
+              </p>
+            )}
             <Button
-              className="w-full"
+              className="h-11 w-full rounded-xl bg-slate-950 shadow-lg shadow-slate-950/15 hover:bg-slate-800 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-100"
               size="lg"
               disabled={loading}
             >
@@ -245,7 +312,7 @@ export function LoginScreen() {
             ) : null}
           </div>
           {accounts.length > 0 && mode !== "reset-confirm" && (
-            <div className="mt-8 border-t pt-5">
+            <div className="mt-8 border-t border-black/8 pt-5 dark:border-white/10">
               <p className="text-muted-foreground mb-3 text-xs font-medium tracking-wide uppercase">
                 已保存账号
               </p>
@@ -254,7 +321,7 @@ export function LoginScreen() {
                   <button
                     key={account.user.id}
                     onClick={() => switchAccount(account.user.id)}
-                    className="hover:bg-muted/30 flex w-full items-center gap-3 rounded-xl border p-3 text-left"
+                    className="hy-glass-control hover:bg-muted/50 flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-colors"
                   >
                     <UserRound className="text-muted-foreground size-5" />
                     <span className="min-w-0">

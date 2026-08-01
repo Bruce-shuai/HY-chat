@@ -34,6 +34,7 @@ import {
 import { backendUrl } from "@/lib/backend-url";
 import { ContentBlocksPreview } from "./ContentBlocksPreview";
 import { AccountMenu } from "@/components/auth/AccountMenu";
+import { DistortedGlass } from "@/components/ui/distorted-glass";
 import { useAuth } from "@/providers/Auth";
 import {
   getKnownStreamErrorInfo,
@@ -340,8 +341,12 @@ export function Thread() {
   };
 
   return (
-    <div className="bg-background flex h-dvh w-full overflow-hidden">
-      <div className="relative hidden lg:flex">
+    <div className="bg-background relative isolate flex h-dvh w-full overflow-hidden">
+      <div
+        aria-hidden="true"
+        className="hy-chat-ambient pointer-events-none absolute inset-0 z-0"
+      />
+      <div className="relative z-10 hidden lg:flex">
         <motion.div
           className="bg-background absolute z-20 h-full overflow-hidden border-r"
           style={{ width: 300 }}
@@ -368,7 +373,7 @@ export function Thread() {
 
       <div
         className={cn(
-          "grid min-h-0 w-full grid-cols-[1fr_0fr] transition-all duration-500",
+          "relative z-10 grid min-h-0 w-full grid-cols-[1fr_0fr] transition-all duration-500",
           artifactOpen && "lg:grid-cols-[3fr_2fr]",
         )}
       >
@@ -394,28 +399,29 @@ export function Thread() {
         >
           {!chatStarted && (
             <div className="absolute top-0 left-0 z-10 flex w-full items-center justify-between gap-3 px-3 pt-[calc(env(safe-area-inset-top)+0.5rem)] pb-2 sm:p-2 sm:pl-4">
-              <div>
-                {(!chatHistoryOpen || !isLargeScreen) && (
-                  <Button
-                    className="hover:bg-muted"
-                    variant="ghost"
-                    onClick={() => setChatHistoryOpen((p) => !p)}
-                  >
-                    {chatHistoryOpen ? (
-                      <PanelRightOpen className="size-5" />
-                    ) : (
-                      <PanelRightClose className="size-5" />
-                    )}
-                  </Button>
-                )}
-              </div>
-              <div className="absolute top-2 right-3 flex items-center">
+              <div className="hy-glass-surface relative flex w-full items-center justify-between rounded-2xl border p-1.5 shadow-sm sm:px-2">
+                <div>
+                  {(!chatHistoryOpen || !isLargeScreen) && (
+                    <Button
+                      className="hover:bg-muted"
+                      variant="ghost"
+                      onClick={() => setChatHistoryOpen((p) => !p)}
+                    >
+                      {chatHistoryOpen ? (
+                        <PanelRightOpen className="size-5" />
+                      ) : (
+                        <PanelRightClose className="size-5" />
+                      )}
+                    </Button>
+                  )}
+                </div>
                 <AccountMenu />
+                <DistortedGlass className="absolute inset-x-0 top-full hidden h-8 opacity-35 xl:block" />
               </div>
             </div>
           )}
           {chatStarted && (
-            <div className="relative z-10 flex min-w-0 items-center justify-between gap-2 px-2 pt-[calc(env(safe-area-inset-top)+0.5rem)] pb-2 sm:gap-3 sm:p-2">
+            <div className="hy-glass-surface relative z-10 m-2 flex min-w-0 items-center justify-between gap-2 rounded-2xl border px-2 pt-[calc(env(safe-area-inset-top)+0.25rem)] pb-1.5 shadow-sm sm:gap-3 sm:p-2">
               <div className="relative flex min-w-0 items-center justify-start gap-2">
                 <div className="absolute left-0 z-10">
                   {(!chatHistoryOpen || !isLargeScreen) && (
@@ -466,7 +472,8 @@ export function Thread() {
                 <AccountMenu />
               </div>
 
-              <div className="from-background to-background/0 absolute inset-x-0 top-full h-5 bg-gradient-to-b" />
+              <DistortedGlass className="absolute inset-x-0 top-full hidden h-8 opacity-45 xl:block" />
+              <div className="from-background/70 to-background/0 absolute inset-x-0 top-full h-7 bg-gradient-to-b xl:hidden" />
             </div>
           )}
 
@@ -518,7 +525,7 @@ export function Thread() {
                     <div className="flex items-center justify-center">
                       <BrandLogo
                         variant="wordmark"
-                        className="rounded-2xl border bg-white px-5 py-4 text-slate-950 shadow-sm"
+                        className="hy-glass-strong rounded-2xl border px-5 py-4 text-slate-950 shadow-sm dark:text-white"
                         priority
                       />
                     </div>
@@ -529,7 +536,7 @@ export function Thread() {
                   <div
                     ref={dropRef}
                     className={cn(
-                      "bg-muted pointer-events-auto relative z-10 mx-auto mb-2 w-full max-w-3xl rounded-xl shadow-xs transition-all sm:mb-8 sm:rounded-2xl",
+                      "hy-glass-strong pointer-events-auto relative z-10 mx-auto mb-2 w-full max-w-3xl rounded-xl shadow-lg transition-all sm:mb-8 sm:rounded-2xl",
                       chatStarted &&
                         "max-h-[58dvh] overflow-hidden sm:max-h-[52dvh]",
                       dragOver
