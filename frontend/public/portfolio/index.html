@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <base href="/portfolio/">
+  <meta name="theme-color" content="#08111f">
+  <meta name="description" content="何阳的像素世界：AI 应用工程师、Agent 全栈开发者，也是骑行、拳击与旅行爱好者。">
+  <title>何阳 · AI 应用工程师的像素世界</title>
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="assets/characters/intro.webp" as="image" type="image/webp">
+  <link rel="stylesheet" href="styles.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="/about#story">跳到个人介绍</a>
+
+  <main id="story" class="world" data-loading="true">
+    <div class="boot-screen" aria-live="polite">
+      <span class="boot-screen__cursor" aria-hidden="true"></span>
+      <span>正在加载像素世界</span>
+    </div>
+
+    <canvas id="world-canvas" class="world__canvas" aria-hidden="true"></canvas>
+    <canvas id="world-text-canvas" class="world__text-canvas" aria-hidden="true"></canvas>
+    <div class="world__shade" aria-hidden="true"></div>
+    <div class="world__scanlines" aria-hidden="true"></div>
+
+    <div id="character-stage" class="character-stage" aria-hidden="true">
+      <div class="character-sprite is-active" data-pose="intro">
+        <img class="character-frame is-current-frame" data-frame="0" src="assets/characters/intro.webp" alt="" draggable="false" decoding="async">
+        <img class="character-frame" data-frame="1" data-src="assets/characters/intro-motion.webp" alt="" draggable="false" decoding="async">
+      </div>
+      <div class="character-sprite" data-pose="work">
+        <img class="character-frame is-current-frame" data-frame="0" data-src="assets/characters/work.webp" alt="" draggable="false" decoding="async">
+        <img class="character-frame" data-frame="1" data-src="assets/characters/work-walk-1.webp" alt="" draggable="false" decoding="async">
+        <img class="character-frame" data-frame="2" data-src="assets/characters/work-walk-2.webp" alt="" draggable="false" decoding="async">
+        <img class="character-frame" data-frame="3" data-src="assets/characters/work-walk-3.webp" alt="" draggable="false" decoding="async">
+      </div>
+      <div class="character-sprite" data-pose="ai">
+        <img class="character-frame is-current-frame" data-frame="0" data-src="assets/characters/ai.webp" alt="" draggable="false" decoding="async">
+        <img class="character-frame" data-frame="1" data-src="assets/characters/ai-motion.webp" alt="" draggable="false" decoding="async">
+      </div>
+      <div class="character-sprite" data-pose="cycling">
+        <img class="character-frame is-current-frame" data-frame="0" data-src="assets/characters/cycling-trek.webp" alt="" draggable="false" decoding="async">
+        <img class="character-frame" data-frame="1" data-src="assets/characters/cycling-trek-motion.webp" alt="" draggable="false" decoding="async">
+      </div>
+      <div class="character-sprite" data-pose="boxing">
+        <img class="character-frame is-current-frame" data-frame="0" data-src="assets/characters/boxing.webp" alt="" draggable="false" decoding="async">
+        <img class="character-frame" data-frame="1" data-src="assets/characters/boxing-motion.webp" alt="" draggable="false" decoding="async">
+      </div>
+      <div class="character-sprite" data-pose="travel">
+        <img class="character-frame is-current-frame" data-frame="0" data-src="assets/characters/travel.webp" alt="" draggable="false" decoding="async">
+        <img class="character-frame" data-frame="1" data-src="assets/characters/travel-walk-1.webp" alt="" draggable="false" decoding="async">
+        <img class="character-frame" data-frame="2" data-src="assets/characters/travel-motion.webp" alt="" draggable="false" decoding="async">
+      </div>
+      <div class="character-sprite" data-pose="finale">
+        <img class="character-frame is-current-frame" data-frame="0" data-src="assets/characters/finale.webp" alt="" draggable="false" decoding="async">
+        <img class="character-frame" data-frame="1" data-src="assets/characters/finale-motion.webp" alt="" draggable="false" decoding="async">
+      </div>
+    </div>
+
+    <div class="progress" aria-hidden="true"><span id="progress-bar"></span></div>
+
+    <header class="topbar">
+      <button class="brand" type="button" data-scene-jump="0" aria-label="返回故事开头">
+        <span class="brand__glyph" aria-hidden="true">HY</span>
+        <span class="brand__copy">
+          <strong>HE YANG</strong>
+          <small>WORLD.EXE</small>
+        </span>
+      </button>
+
+      <nav class="chapter-nav" aria-label="故事章节">
+        <button type="button" data-scene-jump="0">起点</button>
+        <button type="button" data-scene-jump="1">经历</button>
+        <button type="button" data-scene-jump="2">AI 工坊</button>
+        <button type="button" data-scene-jump="3">世界之外</button>
+        <button type="button" data-scene-jump="4">下一站</button>
+      </nav>
+
+      <a class="topbar__resume" href="/">
+        进入 HY-Agent <span aria-hidden="true">→</span>
+      </a>
+    </header>
+
+    <div class="copy-layer">
+      <article class="story-card story-card--hero" data-story="0">
+        <span class="story-card__index">玩家 01 / 05</span>
+        <p class="story-card__eyebrow">你好，世界。</p>
+        <h1>我是何阳，<br><em>一个喜欢创造的程序员。</em></h1>
+        <p class="story-card__body">
+          在互联网工作 3 年，做过千万级业务，也始终对 AI 保持热爱：把想象变成产品，把新的可能带进现实。
+        </p>
+        <ul class="chips" aria-label="身份标签">
+          <li>AI 应用工程师</li>
+          <li>Agent 全栈开发</li>
+        </ul>
+      </article>
+
+      <article class="story-card" data-story="1">
+        <span class="story-card__index">关卡 02 / 05</span>
+        <p class="story-card__eyebrow">互联网城市</p>
+        <h2>在真实业务里，<br><em>把复杂问题变简单。</em></h2>
+        <p class="story-card__body">
+          从快手主站社交到美团旗下 Keeta 的国际化履约业务，我经历过大规模流量，也处理过多国家业务差异。
+        </p>
+        <dl class="stats">
+          <div><dt>3 年</dt><dd>核心业务研发</dd></div>
+          <div><dt>千万级</dt><dd>日均 PV 场景</dd></div>
+          <div><dt>8 个</dt><dd>国家和地区</dd></div>
+        </dl>
+      </article>
+
+      <article class="story-card" data-story="2">
+        <span class="story-card__index">关卡 03 / 05</span>
+        <p class="story-card__eyebrow">AI 工坊</p>
+        <h2>捕捉每一次突破，<br><em>也把想象做出来。</em></h2>
+        <p class="story-card__body">
+          我持续从 X、Instagram、YouTube 和技术社区捕捉 AI 的最新进展与新用法，把好奇变成实验，再用代码快速做成真实、可体验的产品。
+        </p>
+        <ul class="chips" aria-label="AI 兴趣与能力">
+          <li>AI 前沿</li>
+          <li>想象力</li>
+          <li>快速原型</li>
+          <li>产品落地</li>
+        </ul>
+        <div class="story-card__actions">
+          <a class="pixel-button pixel-button--primary" href="/">
+            体验 HY-Agent <span aria-hidden="true">↗</span>
+          </a>
+        </div>
+      </article>
+
+      <article class="story-card" data-story="3">
+        <span class="story-card__index">支线 04 / 05</span>
+        <p class="story-card__eyebrow">屏幕之外</p>
+        <h2>认真创造，<br><em>也尽兴生活。</em></h2>
+        <p class="story-card__body">
+          我在骑行里挑战耐力，在拳击中磨炼专注，也在旅行中不断拓宽眼界。技术之外，我同样热爱挑战、享受生活，并始终保持向上的能量。
+        </p>
+        <ul class="hobbies" aria-label="兴趣爱好">
+          <li><span aria-hidden="true">01</span>骑行</li>
+          <li><span aria-hidden="true">02</span>拳击</li>
+          <li><span aria-hidden="true">03</span>旅行</li>
+        </ul>
+      </article>
+
+      <article class="story-card story-card--finale" data-story="4">
+        <span class="story-card__index">下一关 05 / 05</span>
+        <p class="story-card__eyebrow">下一段旅程</p>
+        <h2>世界还很大，<br><em>继续创造吧。</em></h2>
+        <p class="story-card__body">
+          如果你也在构建真正有用的 AI 产品，我们可以聊聊下一个值得解决的问题。
+        </p>
+        <div class="story-card__actions">
+          <a class="pixel-button pixel-button--primary" href="mailto:284970670@qq.com">联系我</a>
+          <a class="pixel-button" href="assets/he-yang-resume.pdf" target="_blank" rel="noopener">查看简历</a>
+        </div>
+        <p class="story-card__email">284970670@qq.com</p>
+      </article>
+    </div>
+
+    <aside class="route" aria-label="故事进度">
+      <span class="route__line" aria-hidden="true"></span>
+      <button type="button" data-scene-jump="0"><i></i><span>起点</span></button>
+      <button type="button" data-scene-jump="1"><i></i><span>经历</span></button>
+      <button type="button" data-scene-jump="2"><i></i><span>AI 工坊</span></button>
+      <button type="button" data-scene-jump="3"><i></i><span>世界之外</span></button>
+      <button type="button" data-scene-jump="4"><i></i><span>下一站</span></button>
+    </aside>
+
+    <div class="scroll-hint" aria-hidden="true">
+      <span>向下滚动</span>
+      <i></i>
+    </div>
+
+    <div id="scroll-track" class="scroll-track" aria-hidden="true"></div>
+  </main>
+
+  <noscript>
+    <section class="no-script">
+      <h1>何阳 · AI 应用工程师</h1>
+      <p>3 年互联网研发经验，热爱 AI，关注从前沿探索到产品落地的每一种可能。</p>
+      <a href="assets/he-yang-resume.pdf">查看简历</a>
+      <a href="mailto:284970670@qq.com">联系我</a>
+    </section>
+  </noscript>
+</body>
+</html>

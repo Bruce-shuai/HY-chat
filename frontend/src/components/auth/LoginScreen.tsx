@@ -2,12 +2,14 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import {
+  ArrowUpRight,
   Database,
   LoaderCircle,
   ShieldCheck,
   Sparkles,
   UserRound,
 } from "lucide-react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/providers/Auth";
 import { Button } from "@/components/ui/button";
@@ -119,6 +121,13 @@ export function LoginScreen() {
 
   return (
     <main className="hy-login-ambient relative isolate flex min-h-dvh items-center justify-center overflow-hidden p-3 sm:p-8">
+      <Link
+        href="/about"
+        className="absolute top-4 right-4 z-20 inline-flex items-center gap-1.5 rounded-xl border border-white/15 bg-slate-950/35 px-3 py-2 text-sm font-medium text-white backdrop-blur-md transition-colors hover:border-teal-200/50 hover:bg-slate-950/55 sm:top-6 sm:right-6"
+      >
+        认识何阳
+        <ArrowUpRight className="size-4" />
+      </Link>
       <div
         aria-hidden="true"
         className="hy-dot-grid pointer-events-none absolute inset-0 opacity-70"

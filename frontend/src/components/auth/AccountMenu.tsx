@@ -122,6 +122,12 @@ export function AccountMenu() {
             <KeyRound className="size-4" /> 修改密码
           </button>
           <Link
+            href="/about"
+            className="hover:bg-accent flex items-center gap-2 rounded-lg px-3 py-2 text-sm"
+          >
+            <UserRound className="size-4" /> 关于何阳
+          </Link>
+          <Link
             href="/traces"
             className="hover:bg-accent flex items-center gap-2 rounded-lg px-3 py-2 text-sm"
           >
