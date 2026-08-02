@@ -289,9 +289,15 @@
           ? Math.floor((time - introGreetingStartedAt) / IDLE_CHARACTER_FRAME_MS) % activeFrameCount
           : 0;
 
-    const selectedFrame = useIdleFrames || requestedFrame === 0 || activeSprite?.classList.contains("has-motion-frame")
+    const readyFrameIndexes = activeFrames.reduce((indexes, frame, index) => {
+      if (frame?.complete && frame.naturalWidth) indexes.push(index);
+      return indexes;
+    }, []);
+    const requestedFrameIsReady = activeFrames[requestedFrame]?.complete
+      && activeFrames[requestedFrame]?.naturalWidth;
+    const selectedFrame = requestedFrameIsReady
       ? requestedFrame
-      : 0;
+      : readyFrameIndexes[requestedFrame % readyFrameIndexes.length] ?? 0;
     const poseChanged = renderedCharacterPose !== activePose;
     const frameMode = useIdleFrames ? "idle" : "walk";
     const frameModeChanged = renderedCharacterMode !== frameMode;
@@ -1026,6 +1032,9 @@
     }
 
     const interactionActive = time - lastScrollAt < 260;
+    if (!moving && !interactionActive && renderedCharacterWalking) {
+      updateInterface(renderProgress, time);
+    }
     if (moving || interactionActive || needsDraw) ensureLoop();
     else scheduleIdleCharacterFrame();
   }
@@ -1058,8 +1067,8 @@
     root.dataset.loading = "false";
     resize(true);
     updateInterface(renderProgress);
+    ensurePose("intro");
     const warmNextPose = () => {
-      ensurePose("intro");
       ensurePose("work");
     };
     if ("requestIdleCallback" in window) window.requestIdleCallback(warmNextPose, { timeout: 1500 });
@@ -1075,6 +1084,7 @@
     const nextScrollY = window.scrollY || window.pageYOffset || 0;
     if (Math.abs(nextScrollY - lastObservedScrollY) > 1) {
       hasUserScrolled = true;
+      ensurePose(activePose);
       if (idleCharacterTimer) {
         window.clearTimeout(idleCharacterTimer);
         idleCharacterTimer = 0;
