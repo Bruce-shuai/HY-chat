@@ -206,20 +206,12 @@ a:focus-visible {
   transition-duration: 72ms, 72ms, 72ms;
 }
 
-.character-sprite.is-active.is-walking[data-pose="intro"][data-active-frame="1"] {
-  transform: translate3d(calc(-50% + 2px), 0, 0) rotate(0.8deg) scale(1.006);
-}
-
 .character-sprite.is-active.is-walking[data-pose="cycling"][data-active-frame="1"] {
   transform: translate3d(calc(-50% + 6px), 0, 0) rotate(0.6deg) scale(1);
 }
 
 .character-sprite.is-active.is-walking[data-pose="boxing"][data-active-frame="1"] {
   transform: translate3d(calc(-50% + 5px), 0, 0) rotate(0.9deg) scale(1.008);
-}
-
-.character-sprite.is-active.is-walking[data-pose="finale"][data-active-frame="1"] {
-  transform: translate3d(-50%, -2px, 0) rotate(-0.5deg) scale(1.012);
 }
 
 .character-sprite[data-pose="work"]::after,
