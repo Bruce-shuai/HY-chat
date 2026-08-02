@@ -40,6 +40,7 @@
   const WORLD_TRAVEL = 5400;
   const CHARACTER_FRAME_DISTANCE = 18;
   const IDLE_CHARACTER_FRAME_MS = 220;
+  const INTRO_GREETING_DURATION_MS = IDLE_CHARACTER_FRAME_MS * 8;
   const POSES = [
     { id: "intro", end: 0.13 },
     { id: "work", end: 0.39 },
@@ -73,6 +74,9 @@
   let pageVisible = !document.hidden;
   let rafId = 0;
   let idleCharacterTimer = 0;
+  let introGreetingStartedAt = 0;
+  let hasUserScrolled = false;
+  let lastObservedScrollY = window.scrollY || window.pageYOffset || 0;
   let activePose = "intro";
   let desiredPose = "intro";
   let characterFrame = 0;
@@ -210,7 +214,20 @@
       Promise.all(idleFramesToLoad.map(loadFrame)).then(loadedFrames => {
         if (loadedFrames.every(frame => frame?.naturalWidth)) {
           sprite.classList.add("has-idle-frame");
-          if (sprite.dataset.pose === activePose) updateCharacter(renderProgress);
+          if (
+            id === "intro"
+            && !reduceMotion
+            && !hasUserScrolled
+            && !introGreetingStartedAt
+            && targetProgress < 0.001
+          ) {
+            introGreetingStartedAt = performance.now();
+          }
+          if (sprite.dataset.pose === activePose) {
+            updateCharacter(renderProgress);
+            needsDraw = true;
+            ensureLoop();
+          }
         }
       });
     }
@@ -252,7 +269,7 @@
       && !isWalking
       && idleFrames.length > 0
       && activeSprite?.classList.contains("has-idle-frame");
-    const isIdleAnimating = !reduceMotion && useIdleFrames && idleFrames.length > 1;
+    const isGreetingAnimating = useIdleFrames && isIntroGreetingActive(time);
     const activeFrames = useIdleFrames ? idleFrames : walkingFrames;
     const activeFrameCount = activeFrames.length || 1;
     const progressDelta = Math.abs(progress - lastCharacterProgress);
@@ -268,9 +285,9 @@
       ? 0
       : isWalking
         ? characterWalkFrame % activeFrameCount
-        : isIdleAnimating
-          ? Math.floor(time / IDLE_CHARACTER_FRAME_MS) % activeFrameCount
-          : characterWalkFrame % activeFrameCount;
+        : isGreetingAnimating
+          ? Math.floor((time - introGreetingStartedAt) / IDLE_CHARACTER_FRAME_MS) % activeFrameCount
+          : 0;
 
     const selectedFrame = useIdleFrames || requestedFrame === 0 || activeSprite?.classList.contains("has-motion-frame")
       ? requestedFrame
@@ -279,7 +296,7 @@
     const frameMode = useIdleFrames ? "idle" : "walk";
     const frameModeChanged = renderedCharacterMode !== frameMode;
 
-    const isCharacterAnimating = isWalking || isIdleAnimating;
+    const isCharacterAnimating = isWalking || isGreetingAnimating;
     if (activeSprite && (poseChanged || renderedCharacterWalking !== isCharacterAnimating)) {
       activeSprite.classList.toggle("is-walking", isCharacterAnimating);
       renderedCharacterWalking = isCharacterAnimating;
@@ -1017,8 +1034,17 @@
     if (!rafId && pageVisible) rafId = window.requestAnimationFrame(loop);
   }
 
+  function isIntroGreetingActive(time = performance.now()) {
+    return !reduceMotion
+      && !hasUserScrolled
+      && activePose === "intro"
+      && introGreetingStartedAt > 0
+      && time - introGreetingStartedAt < INTRO_GREETING_DURATION_MS
+      && poseMap.get("intro")?.classList.contains("has-idle-frame");
+  }
+
   function scheduleIdleCharacterFrame() {
-    if (idleCharacterTimer || reduceMotion || activePose !== "intro" || !pageVisible) return;
+    if (idleCharacterTimer || !isIntroGreetingActive() || !pageVisible) return;
     idleCharacterTimer = window.setTimeout(() => {
       idleCharacterTimer = 0;
       needsDraw = true;
@@ -1045,7 +1071,18 @@
     button.addEventListener("click", () => jumpTo(Number(button.dataset.sceneJump)));
   });
 
-  window.addEventListener("scroll", updateScroll, { passive: true });
+  window.addEventListener("scroll", () => {
+    const nextScrollY = window.scrollY || window.pageYOffset || 0;
+    if (Math.abs(nextScrollY - lastObservedScrollY) > 1) {
+      hasUserScrolled = true;
+      if (idleCharacterTimer) {
+        window.clearTimeout(idleCharacterTimer);
+        idleCharacterTimer = 0;
+      }
+    }
+    lastObservedScrollY = nextScrollY;
+    updateScroll();
+  }, { passive: true });
   window.addEventListener("resize", () => resize(false), { passive: true });
   window.addEventListener("orientationchange", () => resize(true), { passive: true });
   document.addEventListener("visibilitychange", () => {
@@ -1095,6 +1132,8 @@
       canvas: { width: canvas.width, height: canvas.height },
       renderLoopActive: Boolean(rafId),
       idleAnimationActive: Boolean(idleCharacterTimer),
+      introGreetingActive: isIntroGreetingActive(),
+      hasUserScrolled,
       reducedMotion: reduceMotion,
       coarsePointer
     })
