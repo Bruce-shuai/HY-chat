@@ -179,17 +179,19 @@
     if (priority === "high") frame.fetchPriority = "high";
     if (frameLoadPromises.has(frame)) return frameLoadPromises.get(frame);
     if (!frame.getAttribute("src") && frame.dataset.src) frame.src = frame.dataset.src;
-    const decode = () => {
-      if (typeof frame.decode !== "function") return Promise.resolve(frame);
-      return frame.decode().catch(() => undefined).then(() => frame);
-    };
-    const pending = frame.complete && frame.naturalWidth
-      ? decode()
-      : new Promise(resolve => {
-        const finish = () => decode().then(resolve);
-        frame.addEventListener("load", finish, { once: true });
-        frame.addEventListener("error", () => resolve(frame), { once: true });
-      });
+    const pending = new Promise(resolve => {
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        frame.removeEventListener("load", finish);
+        frame.removeEventListener("error", finish);
+        resolve(frame);
+      };
+      frame.addEventListener("load", finish, { once: true });
+      frame.addEventListener("error", finish, { once: true });
+      if (frame.complete) finish();
+    });
     frameLoadPromises.set(frame, pending);
     return pending;
   }
@@ -202,7 +204,9 @@
     if (priority === "high") primary.fetchPriority = "high";
     if (poseReadyPromises.has(id)) return poseReadyPromises.get(id);
 
-    const ready = loadFrame(primary, priority).then(() => sprite);
+    const ready = loadFrame(primary, priority).then(loadedFrame => (
+      loadedFrame?.naturalWidth ? sprite : null
+    ));
     poseReadyPromises.set(id, ready);
     return ready;
   }
