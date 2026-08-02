@@ -825,30 +825,20 @@ a:focus-visible {
   flex-direction: column;
   align-items: center;
   gap: 9px;
-  min-width: 118px;
-  padding: 11px 16px 10px;
-  border: 1px solid color-mix(in srgb, var(--accent) 58%, rgba(255, 255, 255, 0.28));
   color: #f1faf7;
-  background: linear-gradient(180deg, rgba(8, 23, 38, 0.94), rgba(4, 12, 24, 0.9));
   font: 700 0.72rem/1 var(--font-display);
   letter-spacing: 0.1em;
-  text-shadow: 0 1px 0 #000;
+  text-shadow:
+    0 1px 0 #000,
+    0 0 12px rgba(5, 14, 25, 0.92);
   transform: translateX(-50%);
-  box-shadow:
-    0 0 0 3px rgba(5, 14, 25, 0.48),
-    0 10px 28px rgba(0, 0, 0, 0.34),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.42));
   animation: scroll-hint-bob 1.6s steps(8, end) infinite;
   will-change: opacity, transform;
 }
 
 .scroll-hint::before {
-  content: "";
-  position: absolute;
-  inset: 4px;
-  border-left: 2px solid color-mix(in srgb, var(--accent) 72%, transparent);
-  border-right: 2px solid color-mix(in srgb, var(--accent) 28%, transparent);
-  pointer-events: none;
+  content: none;
 }
 
 .scroll-hint span {
@@ -1099,8 +1089,6 @@ a:focus-visible {
 
   .scroll-hint {
     bottom: calc(18px + env(safe-area-inset-bottom));
-    min-width: 108px;
-    padding: 9px 13px 8px;
     font-size: 0.68rem;
   }
 }
