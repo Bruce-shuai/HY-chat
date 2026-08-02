@@ -820,35 +820,81 @@ a:focus-visible {
   position: fixed;
   z-index: 40;
   left: 50%;
-  bottom: calc(22px + env(safe-area-inset-bottom));
+  bottom: calc(26px + env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
-  color: var(--ink-soft);
-  font: 0.62rem/1 var(--font-display);
-  letter-spacing: 0.12em;
+  gap: 9px;
+  min-width: 118px;
+  padding: 11px 16px 10px;
+  border: 1px solid color-mix(in srgb, var(--accent) 58%, rgba(255, 255, 255, 0.28));
+  color: #f1faf7;
+  background: linear-gradient(180deg, rgba(8, 23, 38, 0.94), rgba(4, 12, 24, 0.9));
+  font: 700 0.72rem/1 var(--font-display);
+  letter-spacing: 0.1em;
+  text-shadow: 0 1px 0 #000;
   transform: translateX(-50%);
-  will-change: opacity;
+  box-shadow:
+    0 0 0 3px rgba(5, 14, 25, 0.48),
+    0 10px 28px rgba(0, 0, 0, 0.34),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  animation: scroll-hint-bob 1.6s steps(8, end) infinite;
+  will-change: opacity, transform;
+}
+
+.scroll-hint::before {
+  content: "";
+  position: absolute;
+  inset: 4px;
+  border-left: 2px solid color-mix(in srgb, var(--accent) 72%, transparent);
+  border-right: 2px solid color-mix(in srgb, var(--accent) 28%, transparent);
+  pointer-events: none;
+}
+
+.scroll-hint span {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.scroll-hint span::before {
+  content: "↓";
+  color: var(--accent);
+  font-size: 1rem;
+  line-height: 0.7;
+  animation: scroll-hint-arrow 800ms steps(4, end) infinite;
 }
 
 .scroll-hint i {
   position: relative;
   display: block;
-  width: 16px;
-  height: 24px;
-  border: 1px solid rgba(255, 255, 255, 0.4);
+  width: 20px;
+  height: 28px;
+  border: 1px solid rgba(226, 242, 247, 0.72);
+  background: rgba(94, 230, 196, 0.04);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 18%, transparent);
 }
 
 .scroll-hint i::after {
   content: "";
   position: absolute;
   top: 4px;
-  left: 6px;
-  width: 2px;
-  height: 5px;
+  left: 8px;
+  width: 3px;
+  height: 7px;
   background: var(--accent);
+  box-shadow: 0 0 7px color-mix(in srgb, var(--accent) 68%, transparent);
   animation: wheel 1.3s steps(4, end) infinite;
+}
+
+@keyframes scroll-hint-bob {
+  0%, 100% { transform: translate3d(-50%, 0, 0); }
+  50% { transform: translate3d(-50%, 4px, 0); }
+}
+
+@keyframes scroll-hint-arrow {
+  0%, 100% { opacity: 0.5; transform: translateY(-2px); }
+  50% { opacity: 1; transform: translateY(2px); }
 }
 
 @keyframes wheel {
@@ -1052,7 +1098,10 @@ a:focus-visible {
   }
 
   .scroll-hint {
-    bottom: calc(16px + env(safe-area-inset-bottom));
+    bottom: calc(18px + env(safe-area-inset-bottom));
+    min-width: 108px;
+    padding: 9px 13px 8px;
+    font-size: 0.68rem;
   }
 }
 
