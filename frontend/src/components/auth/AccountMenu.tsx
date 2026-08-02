@@ -125,7 +125,7 @@ export function AccountMenu() {
             href="/about"
             className="hover:bg-accent flex items-center gap-2 rounded-lg px-3 py-2 text-sm"
           >
-            <UserRound className="size-4" /> 关于何阳
+            <UserRound className="size-4" /> 关于作者
           </Link>
           <Link
             href="/traces"

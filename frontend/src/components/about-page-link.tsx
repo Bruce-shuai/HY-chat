@@ -14,11 +14,11 @@ export function AboutPageLink({ className }: { className?: string }) {
     >
       <Link
         href="/about"
-        aria-label="进入关于何阳页面"
-        title="关于何阳"
+        aria-label="进入关于作者页面"
+        title="关于作者"
       >
         <UserRound className="size-4" />
-        <span className="hidden sm:inline">关于何阳</span>
+        <span className="hidden sm:inline">关于作者</span>
       </Link>
     </Button>
   );
