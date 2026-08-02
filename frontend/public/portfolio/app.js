@@ -25,6 +25,8 @@
   ]));
   const frameLoadPromises = new WeakMap();
   const poseReadyPromises = new Map();
+  const poseMotionReadyPromises = new Map();
+  const poseIdleReadyPromises = new Map();
 
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const coarsePointer = window.matchMedia("(hover: none) and (pointer: coarse)").matches;
@@ -172,8 +174,9 @@
     return clamp(enter * leave);
   }
 
-  function loadFrame(frame) {
+  function loadFrame(frame, priority = "auto") {
     if (!frame) return Promise.resolve(null);
+    if (priority === "high") frame.fetchPriority = "high";
     if (frameLoadPromises.has(frame)) return frameLoadPromises.get(frame);
     if (!frame.getAttribute("src") && frame.dataset.src) frame.src = frame.dataset.src;
     const decode = () => {
@@ -191,65 +194,94 @@
     return pending;
   }
 
-  function ensurePose(id) {
-    if (poseReadyPromises.has(id)) return poseReadyPromises.get(id);
+  function ensurePose(id, priority = "auto") {
     const sprite = poseMap.get(id);
     if (!sprite) return Promise.resolve(null);
     const frames = poseFrames.get(id) || [];
-    const idleFrames = idlePoseFrames.get(id) || [];
     const primary = frames[0];
-    const motionFrames = frames.slice(1);
+    if (priority === "high") primary.fetchPriority = "high";
+    if (poseReadyPromises.has(id)) return poseReadyPromises.get(id);
 
-    if (!reduceMotion && motionFrames.length) {
-      Promise.all(motionFrames.map(loadFrame)).then(loadedFrames => {
-        if (loadedFrames.every(frame => frame?.naturalWidth)) {
-          sprite.classList.add("has-motion-frame");
-          if (sprite.dataset.pose === activePose) updateCharacter(renderProgress);
-        }
-      });
-    }
-
-    if (idleFrames.length) {
-      const idleFramesToLoad = reduceMotion ? idleFrames.slice(0, 1) : idleFrames;
-      Promise.all(idleFramesToLoad.map(loadFrame)).then(loadedFrames => {
-        if (loadedFrames.every(frame => frame?.naturalWidth)) {
-          sprite.classList.add("has-idle-frame");
-          if (
-            id === "intro"
-            && !reduceMotion
-            && !hasUserScrolled
-            && !introGreetingStartedAt
-            && targetProgress < 0.001
-          ) {
-            introGreetingStartedAt = performance.now();
-          }
-          if (sprite.dataset.pose === activePose) {
-            updateCharacter(renderProgress);
-            needsDraw = true;
-            ensureLoop();
-          }
-        }
-      });
-    }
-
-    const ready = loadFrame(primary).then(() => sprite);
+    const ready = loadFrame(primary, priority).then(() => sprite);
     poseReadyPromises.set(id, ready);
+    return ready;
+  }
+
+  function ensurePoseMotion(id, priority = "auto") {
+    const sprite = poseMap.get(id);
+    const motionFrames = (poseFrames.get(id) || []).slice(1);
+    if (!sprite || reduceMotion || !motionFrames.length) return Promise.resolve(sprite || null);
+    if (priority === "high") motionFrames.forEach(frame => { frame.fetchPriority = "high"; });
+    if (poseMotionReadyPromises.has(id)) return poseMotionReadyPromises.get(id);
+
+    const ready = Promise.all(motionFrames.map(frame => (
+      loadFrame(frame, priority).then(loadedFrame => {
+        if (loadedFrame?.naturalWidth && sprite.dataset.pose === activePose) {
+          needsDraw = true;
+          ensureLoop();
+        }
+        return loadedFrame;
+      })
+    ))).then(loadedFrames => {
+      if (loadedFrames.every(frame => frame?.naturalWidth)) {
+        sprite.classList.add("has-motion-frame");
+        if (sprite.dataset.pose === activePose) updateCharacter(renderProgress);
+      }
+      return sprite;
+    });
+    poseMotionReadyPromises.set(id, ready);
+    return ready;
+  }
+
+  function ensurePoseIdle(id, priority = "auto") {
+    const sprite = poseMap.get(id);
+    const idleFrames = idlePoseFrames.get(id) || [];
+    if (!sprite || !idleFrames.length) return Promise.resolve(sprite || null);
+    if (priority === "high") idleFrames.forEach(frame => { frame.fetchPriority = "high"; });
+    if (poseIdleReadyPromises.has(id)) return poseIdleReadyPromises.get(id);
+
+    const idleFramesToLoad = reduceMotion ? idleFrames.slice(0, 1) : idleFrames;
+    const ready = Promise.all(idleFramesToLoad.map(frame => loadFrame(frame, priority))).then(loadedFrames => {
+      if (loadedFrames.every(frame => frame?.naturalWidth)) {
+        sprite.classList.add("has-idle-frame");
+        if (
+          id === "intro"
+          && !reduceMotion
+          && !hasUserScrolled
+          && !introGreetingStartedAt
+          && targetProgress < 0.001
+        ) {
+          introGreetingStartedAt = performance.now();
+        }
+        if (sprite.dataset.pose === activePose) {
+          updateCharacter(renderProgress);
+          needsDraw = true;
+          ensureLoop();
+        }
+      }
+      return sprite;
+    });
+    poseIdleReadyPromises.set(id, ready);
     return ready;
   }
 
   function requestPose(id) {
     if (id === activePose) {
       desiredPose = id;
+      ensurePoseMotion(id, "high");
+      if (id === "intro") ensurePoseIdle(id, "high");
       return;
     }
     if (id === desiredPose) return;
     desiredPose = id;
-    ensurePose(id).then(sprite => {
+    ensurePose(id, "high").then(sprite => {
       if (!sprite || desiredPose !== id) return;
       poseMap.get(activePose)?.classList.remove("is-walking");
       poseSprites.forEach(node => node.classList.toggle("is-active", node === sprite));
       activePose = id;
       root.dataset.pose = id;
+      ensurePoseMotion(id, "high");
+      if (id === "intro") ensurePoseIdle(id, "high");
 
       const index = POSES.findIndex(pose => pose.id === id);
       [POSES[index - 1], POSES[index + 1]].filter(Boolean).forEach(pose => ensurePose(pose.id));
@@ -1067,12 +1099,17 @@
     root.dataset.loading = "false";
     resize(true);
     updateInterface(renderProgress);
-    ensurePose("intro");
-    const warmNextPose = () => {
-      ensurePose("work");
+    ensurePose("intro", "high");
+    ensurePoseMotion("intro", "high");
+    ensurePoseIdle("intro", "high");
+    POSES.slice(1).forEach(pose => ensurePose(pose.id));
+    const warmMotionPoses = async () => {
+      for (const pose of POSES.slice(1)) {
+        await ensurePoseMotion(pose.id);
+      }
     };
-    if ("requestIdleCallback" in window) window.requestIdleCallback(warmNextPose, { timeout: 1500 });
-    else window.setTimeout(warmNextPose, 500);
+    if ("requestIdleCallback" in window) window.requestIdleCallback(warmMotionPoses, { timeout: 900 });
+    else window.setTimeout(warmMotionPoses, 400);
     ensureLoop();
   }
 
