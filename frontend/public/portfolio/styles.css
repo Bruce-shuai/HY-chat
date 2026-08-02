@@ -196,7 +196,7 @@ a:focus-visible {
 
 .character-sprite[data-pose="boxing"] {
   left: 69%;
-  bottom: calc(20% - 14px);
+  bottom: calc(20% - 2px);
   height: clamp(340px, 47vh, 500px);
 }
 
@@ -213,10 +213,6 @@ a:focus-visible {
 
 .character-sprite.is-active.is-walking {
   transition-duration: 72ms, 72ms, 72ms;
-}
-
-.character-sprite.is-active.is-walking[data-pose="boxing"][data-active-frame="1"] {
-  transform: translate3d(calc(-50% + 5px), 0, 0) rotate(0.9deg) scale(1.008);
 }
 
 .character-sprite[data-pose="work"]::after,
@@ -292,7 +288,7 @@ a:focus-visible {
   animation: character-speed-lines 420ms steps(3, end) infinite;
 }
 
-.character-sprite.is-walking[data-pose="boxing"][data-active-frame="1"]::after {
+.character-sprite.is-walking[data-pose="boxing"][data-active-frame="2"]::after {
   content: "";
   position: absolute;
   z-index: 2;
@@ -962,7 +958,7 @@ a:focus-visible {
   }
 
   .character-sprite[data-pose="boxing"] {
-    bottom: calc(52% - 12px);
+    bottom: calc(52% - 2px);
   }
 
   .topbar {
