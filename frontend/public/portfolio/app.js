@@ -19,6 +19,10 @@
     sprite.dataset.pose,
     [...sprite.querySelectorAll("[data-frame]")]
   ]));
+  const idlePoseFrames = new Map(poseSprites.map(sprite => [
+    sprite.dataset.pose,
+    [...sprite.querySelectorAll("[data-idle-frame]")]
+  ]));
   const frameLoadPromises = new WeakMap();
   const poseReadyPromises = new Map();
 
@@ -35,7 +39,7 @@
 
   const WORLD_TRAVEL = 5400;
   const CHARACTER_FRAME_DISTANCE = 18;
-  const IDLE_CHARACTER_FRAME_MS = 160;
+  const IDLE_CHARACTER_FRAME_MS = 220;
   const POSES = [
     { id: "intro", end: 0.13 },
     { id: "work", end: 0.39 },
@@ -60,6 +64,7 @@
   let characterWalkFrame = 0;
   let renderedCharacterPose = "intro";
   let renderedCharacterFrame = 0;
+  let renderedCharacterMode = "walk";
   let renderedCharacterWalking = false;
   let lastTextProgress = Number.NaN;
   let drawTextThisFrame = true;
@@ -187,6 +192,7 @@
     const sprite = poseMap.get(id);
     if (!sprite) return Promise.resolve(null);
     const frames = poseFrames.get(id) || [];
+    const idleFrames = idlePoseFrames.get(id) || [];
     const primary = frames[0];
     const motionFrames = frames.slice(1);
 
@@ -194,6 +200,16 @@
       Promise.all(motionFrames.map(loadFrame)).then(loadedFrames => {
         if (loadedFrames.every(frame => frame?.naturalWidth)) {
           sprite.classList.add("has-motion-frame");
+          if (sprite.dataset.pose === activePose) updateCharacter(renderProgress);
+        }
+      });
+    }
+
+    if (idleFrames.length) {
+      const idleFramesToLoad = reduceMotion ? idleFrames.slice(0, 1) : idleFrames;
+      Promise.all(idleFramesToLoad.map(loadFrame)).then(loadedFrames => {
+        if (loadedFrames.every(frame => frame?.naturalWidth)) {
+          sprite.classList.add("has-idle-frame");
           if (sprite.dataset.pose === activePose) updateCharacter(renderProgress);
         }
       });
@@ -227,12 +243,18 @@
     const pose = POSES.find(item => progress <= item.end) || POSES[POSES.length - 1];
     requestPose(pose.id);
     const activeSprite = poseMap.get(activePose);
-    const activeFrames = poseFrames.get(activePose) || [];
-    const activeFrameCount = activeFrames.length || 1;
+    const walkingFrames = poseFrames.get(activePose) || [];
+    const idleFrames = idlePoseFrames.get(activePose) || [];
     const isWalking = !reduceMotion && (
       time - lastScrollAt < 220 || Math.abs(targetProgress - renderProgress) > 0.00002
     );
-    const isIdleAnimating = !reduceMotion && activePose === "intro" && activeFrameCount > 1;
+    const useIdleFrames = activePose === "intro"
+      && !isWalking
+      && idleFrames.length > 0
+      && activeSprite?.classList.contains("has-idle-frame");
+    const isIdleAnimating = !reduceMotion && useIdleFrames && idleFrames.length > 1;
+    const activeFrames = useIdleFrames ? idleFrames : walkingFrames;
+    const activeFrameCount = activeFrames.length || 1;
     const progressDelta = Math.abs(progress - lastCharacterProgress);
     if (!reduceMotion && Number.isFinite(progressDelta) && progressDelta < 0.12) {
       characterTravelDistance += progressDelta * WORLD_TRAVEL;
@@ -250,10 +272,12 @@
           ? Math.floor(time / IDLE_CHARACTER_FRAME_MS) % activeFrameCount
           : characterWalkFrame % activeFrameCount;
 
-    const selectedFrame = requestedFrame === 0 || activeSprite?.classList.contains("has-motion-frame")
+    const selectedFrame = useIdleFrames || requestedFrame === 0 || activeSprite?.classList.contains("has-motion-frame")
       ? requestedFrame
       : 0;
     const poseChanged = renderedCharacterPose !== activePose;
+    const frameMode = useIdleFrames ? "idle" : "walk";
+    const frameModeChanged = renderedCharacterMode !== frameMode;
 
     const isCharacterAnimating = isWalking || isIdleAnimating;
     if (activeSprite && (poseChanged || renderedCharacterWalking !== isCharacterAnimating)) {
@@ -261,18 +285,20 @@
       renderedCharacterWalking = isCharacterAnimating;
     }
 
-    if (activeSprite && (poseChanged || renderedCharacterFrame !== selectedFrame)) {
-      if (poseChanged) {
-        activeFrames.forEach((frame, index) => {
-          frame.classList.toggle("is-current-frame", index === selectedFrame);
+    if (activeSprite && (poseChanged || frameModeChanged || renderedCharacterFrame !== selectedFrame)) {
+      if (poseChanged || frameModeChanged) {
+        [...walkingFrames, ...idleFrames].forEach(frame => {
+          frame.classList.toggle("is-current-frame", frame === activeFrames[selectedFrame]);
         });
       } else {
         activeFrames[renderedCharacterFrame]?.classList.remove("is-current-frame");
         activeFrames[selectedFrame]?.classList.add("is-current-frame");
       }
       activeSprite.dataset.activeFrame = String(selectedFrame);
+      activeSprite.dataset.frameMode = frameMode;
       renderedCharacterPose = activePose;
       renderedCharacterFrame = selectedFrame;
+      renderedCharacterMode = frameMode;
     }
 
     characterFrame = selectedFrame;
@@ -1060,6 +1086,7 @@
       activeScene,
       activePose,
       characterFrame,
+      characterFrameMode: renderedCharacterMode,
       loadedPoses: poseSprites.filter(sprite => {
         const frame = sprite.querySelector('[data-frame="0"]');
         return frame?.complete && frame.naturalWidth;
