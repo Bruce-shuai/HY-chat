@@ -1102,13 +1102,14 @@
     hasReadied = true;
     root.dataset.loading = "false";
     resize(true);
-    updateInterface(renderProgress);
     ensurePose("intro", "high");
+    POSES.slice(1).forEach(pose => ensurePose(pose.id, "high"));
+    updateInterface(renderProgress);
     ensurePoseMotion("intro", "high");
     ensurePoseIdle("intro", "high");
-    POSES.slice(1).forEach(pose => ensurePose(pose.id));
     const warmMotionPoses = async () => {
       for (const pose of POSES.slice(1)) {
+        if (hasUserScrolled || !pageVisible) break;
         await ensurePoseMotion(pose.id);
       }
     };
