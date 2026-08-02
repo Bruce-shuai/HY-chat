@@ -196,6 +196,18 @@
     return clamp(enter * leave);
   }
 
+  function poseForProgress(progress) {
+    for (let index = 0; index < POSES.length; index += 1) {
+      if (progress <= POSES[index].end) return POSES[index];
+    }
+    return POSES[POSES.length - 1];
+  }
+
+  function shouldLoadPoseMotion(id) {
+    return poseForProgress(targetProgress).id === id
+      || Math.abs(targetProgress - renderProgress) < 0.015;
+  }
+
   function loadFrame(frame, priority = "auto") {
     if (!frame) return Promise.resolve(null);
     if (priority === "high") frame.fetchPriority = "high";
@@ -309,7 +321,11 @@
   function requestPose(id) {
     if (id === activePose) {
       desiredPose = id;
-      if (!reduceMotion && !highPriorityMotionPoseIds.has(id)) ensurePoseMotion(id, "high");
+      if (
+        !reduceMotion
+        && !highPriorityMotionPoseIds.has(id)
+        && shouldLoadPoseMotion(id)
+      ) ensurePoseMotion(id, "high");
       if (id === "intro" && !highPriorityIdlePoseIds.has(id)) ensurePoseIdle(id, "high");
       return;
     }
@@ -321,7 +337,7 @@
       poseSprites.forEach(node => node.classList.toggle("is-active", node === sprite));
       activePose = id;
       root.dataset.pose = id;
-      ensurePoseMotion(id, "high");
+      if (shouldLoadPoseMotion(id)) ensurePoseMotion(id, "high");
       if (id === "intro") ensurePoseIdle(id, "high");
 
       const index = poseIndexById.get(id);
@@ -330,13 +346,7 @@
   }
 
   function updateCharacter(progress, time = performance.now()) {
-    let pose = POSES[POSES.length - 1];
-    for (let index = 0; index < POSES.length; index += 1) {
-      if (progress <= POSES[index].end) {
-        pose = POSES[index];
-        break;
-      }
-    }
+    const pose = poseForProgress(progress);
     requestPose(pose.id);
     const activeSprite = poseMap.get(activePose);
     const walkingFrames = poseFrames.get(activePose) || [];
