@@ -27,6 +27,9 @@
   const poseReadyPromises = new Map();
   const poseMotionReadyPromises = new Map();
   const poseIdleReadyPromises = new Map();
+  const highPriorityPoseIds = new Set();
+  const highPriorityMotionPoseIds = new Set();
+  const highPriorityIdlePoseIds = new Set();
 
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const coarsePointer = window.matchMedia("(hover: none) and (pointer: coarse)").matches;
@@ -201,7 +204,10 @@
     if (!sprite) return Promise.resolve(null);
     const frames = poseFrames.get(id) || [];
     const primary = frames[0];
-    if (priority === "high") primary.fetchPriority = "high";
+    if (priority === "high" && !highPriorityPoseIds.has(id)) {
+      highPriorityPoseIds.add(id);
+      primary.fetchPriority = "high";
+    }
     if (poseReadyPromises.has(id)) return poseReadyPromises.get(id);
 
     const ready = loadFrame(primary, priority).then(loadedFrame => (
@@ -213,10 +219,16 @@
 
   function ensurePoseMotion(id, priority = "auto") {
     const sprite = poseMap.get(id);
+    if (!sprite || reduceMotion) return Promise.resolve(sprite || null);
+    const cached = poseMotionReadyPromises.get(id);
+    if (cached && (priority !== "high" || highPriorityMotionPoseIds.has(id))) return cached;
     const motionFrames = (poseFrames.get(id) || []).slice(1);
-    if (!sprite || reduceMotion || !motionFrames.length) return Promise.resolve(sprite || null);
-    if (priority === "high") motionFrames.forEach(frame => { frame.fetchPriority = "high"; });
-    if (poseMotionReadyPromises.has(id)) return poseMotionReadyPromises.get(id);
+    if (!motionFrames.length) return Promise.resolve(sprite);
+    if (priority === "high" && !highPriorityMotionPoseIds.has(id)) {
+      highPriorityMotionPoseIds.add(id);
+      motionFrames.forEach(frame => { frame.fetchPriority = "high"; });
+    }
+    if (cached) return cached;
 
     const ready = Promise.all(motionFrames.map(frame => (
       loadFrame(frame, priority).then(loadedFrame => {
@@ -239,10 +251,16 @@
 
   function ensurePoseIdle(id, priority = "auto") {
     const sprite = poseMap.get(id);
+    if (!sprite) return Promise.resolve(null);
+    const cached = poseIdleReadyPromises.get(id);
+    if (cached && (priority !== "high" || highPriorityIdlePoseIds.has(id))) return cached;
     const idleFrames = idlePoseFrames.get(id) || [];
-    if (!sprite || !idleFrames.length) return Promise.resolve(sprite || null);
-    if (priority === "high") idleFrames.forEach(frame => { frame.fetchPriority = "high"; });
-    if (poseIdleReadyPromises.has(id)) return poseIdleReadyPromises.get(id);
+    if (!idleFrames.length) return Promise.resolve(sprite);
+    if (priority === "high" && !highPriorityIdlePoseIds.has(id)) {
+      highPriorityIdlePoseIds.add(id);
+      idleFrames.forEach(frame => { frame.fetchPriority = "high"; });
+    }
+    if (cached) return cached;
 
     const idleFramesToLoad = reduceMotion ? idleFrames.slice(0, 1) : idleFrames;
     const ready = Promise.all(idleFramesToLoad.map(frame => loadFrame(frame, priority))).then(loadedFrames => {
@@ -272,8 +290,8 @@
   function requestPose(id) {
     if (id === activePose) {
       desiredPose = id;
-      ensurePoseMotion(id, "high");
-      if (id === "intro") ensurePoseIdle(id, "high");
+      if (!reduceMotion && !highPriorityMotionPoseIds.has(id)) ensurePoseMotion(id, "high");
+      if (id === "intro" && !highPriorityIdlePoseIds.has(id)) ensurePoseIdle(id, "high");
       return;
     }
     if (id === desiredPose) return;
@@ -325,15 +343,18 @@
           ? Math.floor((time - introGreetingStartedAt) / IDLE_CHARACTER_FRAME_MS) % activeFrameCount
           : 0;
 
-    const readyFrameIndexes = activeFrames.reduce((indexes, frame, index) => {
-      if (frame?.complete && frame.naturalWidth) indexes.push(index);
-      return indexes;
-    }, []);
     const requestedFrameIsReady = activeFrames[requestedFrame]?.complete
       && activeFrames[requestedFrame]?.naturalWidth;
-    const selectedFrame = requestedFrameIsReady
-      ? requestedFrame
-      : readyFrameIndexes[requestedFrame % readyFrameIndexes.length] ?? 0;
+    let selectedFrame = requestedFrameIsReady ? requestedFrame : 0;
+    if (!requestedFrameIsReady) {
+      for (let offset = 1; offset < activeFrameCount; offset += 1) {
+        const candidate = (requestedFrame - offset + activeFrameCount) % activeFrameCount;
+        if (activeFrames[candidate]?.complete && activeFrames[candidate]?.naturalWidth) {
+          selectedFrame = candidate;
+          break;
+        }
+      }
+    }
     const poseChanged = renderedCharacterPose !== activePose;
     const frameMode = useIdleFrames ? "idle" : "walk";
     const frameModeChanged = renderedCharacterMode !== frameMode;
@@ -1105,16 +1126,12 @@
     ensurePose("intro", "high");
     POSES.slice(1).forEach(pose => ensurePose(pose.id, "high"));
     updateInterface(renderProgress);
-    ensurePoseMotion("intro", "high");
-    ensurePoseIdle("intro", "high");
-    const warmMotionPoses = async () => {
-      for (const pose of POSES.slice(1)) {
-        if (hasUserScrolled || !pageVisible) break;
-        await ensurePoseMotion(pose.id);
-      }
+    const warmNextPose = async () => {
+      await ensurePoseMotion("intro", "high");
+      if (!hasUserScrolled && pageVisible) ensurePoseMotion("work");
     };
-    if ("requestIdleCallback" in window) window.requestIdleCallback(warmMotionPoses, { timeout: 900 });
-    else window.setTimeout(warmMotionPoses, 400);
+    if ("requestIdleCallback" in window) window.requestIdleCallback(warmNextPose, { timeout: 900 });
+    else window.setTimeout(warmNextPose, 400);
     ensureLoop();
   }
 
