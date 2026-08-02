@@ -3,6 +3,7 @@
 import React, { useEffect } from "react";
 import dynamic from "next/dynamic";
 import { AuthBoundary } from "@/components/auth/AuthBoundary";
+import { AboutPageLink } from "@/components/about-page-link";
 import { BrandLogo } from "@/components/brand-logo";
 
 const loadChatWorkspace = () => import("@/components/chat-workspace");
@@ -17,9 +18,12 @@ function WorkspaceLoadingScreen() {
       aria-busy="true"
       aria-label="正在加载 HY-Agent"
     >
-      <header className="flex h-16 items-center gap-3 border-b px-4 sm:px-6">
-        <BrandLogo className="size-9 border" />
-        <span className="text-lg font-semibold tracking-tight">HY-Agent</span>
+      <header className="flex h-16 items-center justify-between border-b px-4 sm:px-6">
+        <div className="flex items-center gap-3">
+          <BrandLogo className="size-9 border" />
+          <span className="text-lg font-semibold tracking-tight">HY-Agent</span>
+        </div>
+        <AboutPageLink />
       </header>
       <section className="flex flex-1 items-center justify-center p-6">
         <div className="w-full max-w-2xl animate-pulse space-y-4">

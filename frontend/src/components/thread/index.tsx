@@ -34,6 +34,7 @@ import {
 import { backendUrl } from "@/lib/backend-url";
 import { ContentBlocksPreview } from "./ContentBlocksPreview";
 import { AccountMenu } from "@/components/auth/AccountMenu";
+import { AboutPageLink } from "@/components/about-page-link";
 import { DistortedGlass } from "@/components/ui/distorted-glass";
 import { useAuth } from "@/providers/Auth";
 import {
@@ -418,7 +419,10 @@ export function Thread() {
                     </Button>
                   )}
                 </div>
-                <AccountMenu />
+                <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+                  <AboutPageLink />
+                  <AccountMenu />
+                </div>
                 <DistortedGlass className="absolute inset-x-0 top-full hidden h-8 opacity-35 xl:block" />
               </div>
             </div>
@@ -465,6 +469,7 @@ export function Thread() {
               </div>
 
               <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+                <AboutPageLink />
                 <TooltipIconButton
                   size="lg"
                   className="p-4"

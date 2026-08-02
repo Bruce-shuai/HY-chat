@@ -8,6 +8,7 @@ import { ArtifactProvider } from "@/components/thread/artifact";
 import { Toaster } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
 import { AccountMenu } from "@/components/auth/AccountMenu";
+import { AboutPageLink } from "@/components/about-page-link";
 import { BrandLogo } from "@/components/brand-logo";
 import { StreamProvider } from "@/providers/Stream";
 import { ThreadProvider } from "@/providers/Thread";
@@ -39,7 +40,10 @@ function ChatWorkspaceBoundary({ children }: { children: React.ReactNode }) {
                 HY-Agent
               </span>
             </button>
-            <AccountMenu />
+            <div className="flex items-center gap-1 sm:gap-2">
+              <AboutPageLink />
+              <AccountMenu />
+            </div>
           </header>
           <section className="flex flex-1 items-center justify-center p-6">
             <div className="bg-background w-full max-w-lg rounded-xl border p-6 text-center shadow-sm">
