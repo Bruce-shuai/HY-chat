@@ -43,7 +43,7 @@
   ];
 
   const WORLD_TRAVEL = 5400;
-  const CHARACTER_FRAME_DISTANCE = 18;
+  const CHARACTER_FRAME_DISTANCE = 30;
   const IDLE_CHARACTER_FRAME_MS = 220;
   const INTRO_GREETING_DURATION_MS = IDLE_CHARACTER_FRAME_MS * 8;
   const POSES = [
@@ -55,6 +55,7 @@
     { id: "travel", end: 0.845 },
     { id: "finale", end: 1 }
   ];
+  const poseIndexById = new Map(POSES.map((pose, index) => [pose.id, index]));
 
   let logicalW = 480;
   let logicalH = 270;
@@ -75,6 +76,10 @@
   let lastTextProgress = Number.NaN;
   let drawTextThisFrame = true;
   let lastWidth = window.innerWidth;
+  let scrollDistance = 1;
+  let renderedScrollProgress = "";
+  let renderedHintOpacity = "";
+  let scrollHintHidden = false;
   let needsDraw = true;
   let pageVisible = !document.hidden;
   let rafId = 0;
@@ -140,19 +145,33 @@
     textCtx.imageSmoothingEnabled = true;
     lastTextProgress = Number.NaN;
     groundY = Math.round(logicalH * (width <= 720 ? 0.48 : 0.8));
+    scrollDistance = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
     updateScroll();
     needsDraw = true;
   }
 
   function maxScroll() {
-    return Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
+    return scrollDistance;
   }
 
   function updateScroll() {
     lastScrollAt = performance.now();
     targetProgress = clamp((window.scrollY || window.pageYOffset) / maxScroll());
-    progressBar.style.transform = `scaleX(${targetProgress.toFixed(4)})`;
-    hint.style.opacity = String(clamp(1 - targetProgress / 0.055));
+    const nextProgress = targetProgress.toFixed(4);
+    if (nextProgress !== renderedScrollProgress) {
+      progressBar.style.transform = `scaleX(${nextProgress})`;
+      renderedScrollProgress = nextProgress;
+    }
+    const nextHintOpacity = clamp(1 - targetProgress / 0.055).toFixed(3);
+    if (nextHintOpacity !== renderedHintOpacity) {
+      hint.style.opacity = nextHintOpacity;
+      renderedHintOpacity = nextHintOpacity;
+    }
+    const shouldHideHint = targetProgress >= 0.06;
+    if (shouldHideHint !== scrollHintHidden) {
+      hint.classList.toggle("is-hidden", shouldHideHint);
+      scrollHintHidden = shouldHideHint;
+    }
     needsDraw = true;
     ensureLoop();
   }
@@ -305,13 +324,19 @@
       ensurePoseMotion(id, "high");
       if (id === "intro") ensurePoseIdle(id, "high");
 
-      const index = POSES.findIndex(pose => pose.id === id);
+      const index = poseIndexById.get(id);
       [POSES[index - 1], POSES[index + 1]].filter(Boolean).forEach(pose => ensurePose(pose.id));
     });
   }
 
   function updateCharacter(progress, time = performance.now()) {
-    const pose = POSES.find(item => progress <= item.end) || POSES[POSES.length - 1];
+    let pose = POSES[POSES.length - 1];
+    for (let index = 0; index < POSES.length; index += 1) {
+      if (progress <= POSES[index].end) {
+        pose = POSES[index];
+        break;
+      }
+    }
     requestPose(pose.id);
     const activeSprite = poseMap.get(activePose);
     const walkingFrames = poseFrames.get(activePose) || [];
@@ -391,7 +416,7 @@
     updateCharacter(progress, time);
     let strongest = 0;
     let strongestOpacity = -1;
-    const mobile = window.innerWidth <= 720;
+    const mobile = lastWidth <= 720;
 
     cards.forEach((card, index) => {
       const opacity = cardOpacity(index, progress);

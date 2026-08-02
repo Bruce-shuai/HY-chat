@@ -877,6 +877,16 @@ a:focus-visible {
   animation: wheel 1.3s steps(4, end) infinite;
 }
 
+.scroll-hint.is-hidden,
+.scroll-hint.is-hidden span::before,
+.scroll-hint.is-hidden i::after {
+  animation-play-state: paused;
+}
+
+.scroll-hint.is-hidden {
+  visibility: hidden;
+}
+
 @keyframes scroll-hint-bob {
   0%, 100% { transform: translate3d(-50%, 0, 0); }
   50% { transform: translate3d(-50%, 4px, 0); }
