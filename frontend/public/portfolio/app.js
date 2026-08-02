@@ -35,6 +35,7 @@
 
   const WORLD_TRAVEL = 5400;
   const CHARACTER_FRAME_DISTANCE = 18;
+  const IDLE_CHARACTER_FRAME_MS = 160;
   const POSES = [
     { id: "intro", end: 0.13 },
     { id: "work", end: 0.39 },
@@ -66,6 +67,7 @@
   let needsDraw = true;
   let pageVisible = !document.hidden;
   let rafId = 0;
+  let idleCharacterTimer = 0;
   let activePose = "intro";
   let desiredPose = "intro";
   let characterFrame = 0;
@@ -230,6 +232,7 @@
     const isWalking = !reduceMotion && (
       time - lastScrollAt < 220 || Math.abs(targetProgress - renderProgress) > 0.00002
     );
+    const isIdleAnimating = !reduceMotion && activePose === "intro" && activeFrameCount > 1;
     const progressDelta = Math.abs(progress - lastCharacterProgress);
     if (!reduceMotion && Number.isFinite(progressDelta) && progressDelta < 0.12) {
       characterTravelDistance += progressDelta * WORLD_TRAVEL;
@@ -239,16 +242,23 @@
     if (isWalking) {
       characterWalkFrame = Math.floor(characterTravelDistance / CHARACTER_FRAME_DISTANCE);
     }
-    const requestedFrame = reduceMotion ? 0 : characterWalkFrame % activeFrameCount;
+    const requestedFrame = reduceMotion
+      ? 0
+      : isWalking
+        ? characterWalkFrame % activeFrameCount
+        : isIdleAnimating
+          ? Math.floor(time / IDLE_CHARACTER_FRAME_MS) % activeFrameCount
+          : characterWalkFrame % activeFrameCount;
 
     const selectedFrame = requestedFrame === 0 || activeSprite?.classList.contains("has-motion-frame")
       ? requestedFrame
       : 0;
     const poseChanged = renderedCharacterPose !== activePose;
 
-    if (activeSprite && (poseChanged || renderedCharacterWalking !== isWalking)) {
-      activeSprite.classList.toggle("is-walking", isWalking);
-      renderedCharacterWalking = isWalking;
+    const isCharacterAnimating = isWalking || isIdleAnimating;
+    if (activeSprite && (poseChanged || renderedCharacterWalking !== isCharacterAnimating)) {
+      activeSprite.classList.toggle("is-walking", isCharacterAnimating);
+      renderedCharacterWalking = isCharacterAnimating;
     }
 
     if (activeSprite && (poseChanged || renderedCharacterFrame !== selectedFrame)) {
@@ -974,10 +984,20 @@
 
     const interactionActive = time - lastScrollAt < 260;
     if (moving || interactionActive || needsDraw) ensureLoop();
+    else scheduleIdleCharacterFrame();
   }
 
   function ensureLoop() {
     if (!rafId && pageVisible) rafId = window.requestAnimationFrame(loop);
+  }
+
+  function scheduleIdleCharacterFrame() {
+    if (idleCharacterTimer || reduceMotion || activePose !== "intro" || !pageVisible) return;
+    idleCharacterTimer = window.setTimeout(() => {
+      idleCharacterTimer = 0;
+      needsDraw = true;
+      ensureLoop();
+    }, IDLE_CHARACTER_FRAME_MS);
   }
 
   function ready() {
@@ -1008,9 +1028,15 @@
       lastTime = performance.now();
       needsDraw = true;
       ensureLoop();
-    } else if (rafId) {
-      cancelAnimationFrame(rafId);
-      rafId = 0;
+    } else {
+      if (rafId) {
+        cancelAnimationFrame(rafId);
+        rafId = 0;
+      }
+      if (idleCharacterTimer) {
+        window.clearTimeout(idleCharacterTimer);
+        idleCharacterTimer = 0;
+      }
     }
   });
 
@@ -1041,6 +1067,7 @@
       loadedMotionFrames: poseSprites.filter(sprite => sprite.classList.contains("has-motion-frame")).map(sprite => sprite.dataset.pose),
       canvas: { width: canvas.width, height: canvas.height },
       renderLoopActive: Boolean(rafId),
+      idleAnimationActive: Boolean(idleCharacterTimer),
       reducedMotion: reduceMotion,
       coarsePointer
     })
