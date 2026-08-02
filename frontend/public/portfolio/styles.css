@@ -179,6 +179,14 @@ a:focus-visible {
   max-width: 52vw;
 }
 
+.character-sprite[data-pose="ai"] .character-frame {
+  transform: translateX(-50%) scaleX(-1);
+}
+
+.character-sprite[data-pose="ai"] .character-frame[data-frame="0"] {
+  transform: scaleX(-1);
+}
+
 .character-sprite[data-pose="cycling"] {
   left: 68%;
   bottom: 19.5%;
@@ -188,6 +196,7 @@ a:focus-visible {
 
 .character-sprite[data-pose="boxing"] {
   left: 69%;
+  bottom: calc(20% - 14px);
   height: clamp(340px, 47vh, 500px);
 }
 
@@ -950,6 +959,10 @@ a:focus-visible {
     bottom: 51.5%;
     height: min(31dvh, 270px);
     max-width: 94vw;
+  }
+
+  .character-sprite[data-pose="boxing"] {
+    bottom: calc(52% - 12px);
   }
 
   .topbar {
