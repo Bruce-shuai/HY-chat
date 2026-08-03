@@ -187,6 +187,16 @@ a:focus-visible {
   transform: scaleX(-1);
 }
 
+.character-sprite[data-pose="intro"] .character-frame[data-idle-frame="2"],
+.character-sprite[data-pose="intro"] .character-frame[data-idle-frame="6"] {
+  transform: translateX(calc(-50% + 0.94%));
+}
+
+.character-sprite[data-pose="intro"] .character-frame[data-idle-frame="4"] {
+  transform: translateX(calc(-50% - 0.4%)) scale(1.0066);
+  transform-origin: center bottom;
+}
+
 .character-sprite[data-pose="cycling"] {
   left: 68%;
   bottom: 19.5%;

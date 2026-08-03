@@ -351,7 +351,7 @@
     const activeSprite = poseMap.get(activePose);
     const walkingFrames = poseFrames.get(activePose) || [];
     const idleFrames = idlePoseFrames.get(activePose) || [];
-    const isWalking = !reduceMotion && (
+    const isWalking = !reduceMotion && hasUserScrolled && (
       time - lastScrollAt < 220 || Math.abs(targetProgress - renderProgress) > 0.00002
     );
     const useIdleFrames = activePose === "intro"
@@ -790,7 +790,6 @@
       rect(terminalX + 11, groundY - 61, 60, 2, "#2b5b5f");
       rect(terminalX + 11, groundY - 53, 52, 2, "#2b5b5f");
       rect(terminalX + 11, groundY - 45, 36 + ((Math.floor(time / 500) % 2) * 10), 2, "#2b5b5f");
-      pixelText("你好，世界", terminalX + 11, groundY - 22, "#9ff9df", 7);
     }
 
     const arrowX = screenX(820, cameraX);
@@ -1156,18 +1155,20 @@
   function ready() {
     if (hasReadied) return;
     hasReadied = true;
-    root.dataset.loading = "false";
-    resize(true);
     ensurePose("intro", "high");
     POSES.slice(1).forEach(pose => ensurePose(pose.id, "high"));
-    updateInterface(renderProgress);
-    const warmNextPose = async () => {
-      await ensurePoseMotion("intro", "high");
-      if (!hasUserScrolled && pageVisible) ensurePoseMotion("work");
-    };
-    if ("requestIdleCallback" in window) window.requestIdleCallback(warmNextPose, { timeout: 900 });
-    else window.setTimeout(warmNextPose, 400);
-    ensureLoop();
+    ensurePoseIdle("intro", "high").then(() => {
+      root.dataset.loading = "false";
+      resize(true);
+      updateInterface(renderProgress);
+      const warmNextPose = async () => {
+        await ensurePoseMotion("intro", "high");
+        if (!hasUserScrolled && pageVisible) ensurePoseMotion("work");
+      };
+      if ("requestIdleCallback" in window) window.requestIdleCallback(warmNextPose, { timeout: 900 });
+      else window.setTimeout(warmNextPose, 400);
+      ensureLoop();
+    });
   }
 
   jumpButtons.forEach(button => {
